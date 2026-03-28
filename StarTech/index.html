@@ -1,0 +1,1706 @@
+<!doctype html>
+<html lang="tr" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EERIS+ Afet Karar Destek Sistemi</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+  <script src="https://unpkg.com/leaflet-ellipse@0.0.7/L.Ellipse.umd.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@300;500;700;900&amp;display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; background: #0d1117; }
+    #map { width: 100%; height: 100%; z-index: 1; }
+    .leaflet-control-zoom { display: none; }
+
+    .panel-top-left {
+      position: absolute; top: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 14px;
+      padding: 20px 28px; min-width: 260px;
+    }
+    .panel-title {
+      font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 32px;
+      color: #ff6b35; letter-spacing: 2px; line-height: 1;
+    }
+    .panel-subtitle {
+      font-family: 'Outfit', sans-serif; font-weight: 300; font-size: 13px;
+      color: #8b949e; margin-top: 6px; letter-spacing: 0.5px;
+    }
+    .panel-accent-line {
+      width: 40px; height: 3px; background: #ff6b35; border-radius: 2px; margin-top: 10px;
+    }
+
+    .toggle-panel {
+      position: absolute; top: 20px; right: 20px; z-index: 1000;
+      display: flex; gap: 8px;
+    }
+    .toggle-btn {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
+      padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(255,107,53,0.25);
+      background: rgba(13,17,23,0.85); color: #8b949e; cursor: pointer;
+      transition: all 0.25s ease; user-select: none; letter-spacing: 0.5px;
+    }
+    .toggle-btn:hover { border-color: #ff6b35; color: #e6edf3; transform: translateY(-1px); }
+    .toggle-btn.active {
+      background: rgba(255,107,53,0.18); color: #ff6b35;
+      border-color: #ff6b35; box-shadow: 0 0 20px rgba(255,107,53,0.15);
+    }
+
+    .coord-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,107,53,0.15); border-radius: 8px;
+      padding: 8px 14px; font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: #8b949e;
+    }
+    .coord-panel span { color: #ff6b35; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .panel-top-left { animation: fadeSlideIn 0.5s ease; }
+    .toggle-panel { animation: fadeSlideIn 0.5s ease 0.1s both; }
+    .coord-panel { animation: fadeSlideIn 0.5s ease 0.2s both; }
+
+    .time-slider-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 240px;
+      display: none;
+    }
+    .time-slider-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .time-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 8px; letter-spacing: 0.5px;
+    }
+    .time-slider {
+      width: 100%; height: 6px; border-radius: 3px;
+      background: rgba(255,107,53,0.15); appearance: none;
+      -webkit-appearance: none; outline: none; cursor: pointer;
+    }
+    .time-slider::-webkit-slider-thumb {
+      appearance: none; -webkit-appearance: none;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #ff6b35; cursor: pointer;
+      box-shadow: 0 0 12px rgba(255,107,53,0.4);
+      transition: all 0.2s ease;
+    }
+    .time-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 20px rgba(255,107,53,0.6);
+    }
+    .time-slider::-moz-range-thumb {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #ff6b35; cursor: pointer; border: none;
+      box-shadow: 0 0 12px rgba(255,107,53,0.4);
+      transition: all 0.2s ease;
+    }
+    .time-slider::-moz-range-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 20px rgba(255,107,53,0.6);
+    }
+    .time-info {
+      display: flex; justify-content: space-between; margin-top: 10px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8b949e;
+    }
+    .time-info span:first-child { color: #ff6b35; font-weight: 700; }
+
+    .legend-panel {
+      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 220px;
+      display: none;
+    }
+    .legend-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .legend-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+    .legend-gradient {
+      width: 100%; height: 24px; border-radius: 6px;
+      background: linear-gradient(to right, #00ff00, #ffff00, #ff8800, #ff0000);
+      margin-bottom: 8px; box-shadow: 0 0 15px rgba(255,107,53,0.2);
+    }
+    .legend-labels {
+      display: flex; justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e;
+    }
+
+    @keyframes pulse {
+      0%, 100% { r: 8px; opacity: 1; }
+      50% { r: 12px; opacity: 0.6; }
+    }
+    .fire-marker { animation: pulse 1.2s ease-in-out infinite; }
+
+    .simulation-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 280px;
+      display: none;
+      max-height: 420px; overflow-y: auto;
+    }
+    .simulation-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .sim-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+    .sim-control {
+      margin-bottom: 14px;
+    }
+    .sim-toggle {
+      display: flex; align-items: center; gap: 10px; padding: 10px;
+      background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.15);
+      border-radius: 8px; margin-bottom: 14px; cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .sim-toggle:hover {
+      background: rgba(255,107,53,0.12); border-color: rgba(255,107,53,0.25);
+    }
+    .sim-toggle-checkbox {
+      width: 18px; height: 18px; border-radius: 4px;
+      background: rgba(255,107,53,0.2); border: 1px solid rgba(255,107,53,0.4);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s ease;
+    }
+    .sim-toggle-checkbox.checked {
+      background: #ff6b35; border-color: #ff6b35;
+    }
+    .sim-toggle-checkbox.checked::after {
+      content: '✓'; color: #0d1117; font-weight: 700; font-size: 12px;
+    }
+    .sim-toggle-label {
+      flex: 1; font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 700; color: #8b949e;
+    }
+    .sim-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+      color: #8b949e; display: flex; justify-content: space-between; margin-bottom: 6px;
+    }
+    .sim-label-value {
+      color: #ff6b35;
+    }
+    .sim-slider {
+      width: 100%; height: 6px; border-radius: 3px;
+      background: rgba(255,107,53,0.15); appearance: none;
+      -webkit-appearance: none; outline: none; cursor: pointer;
+    }
+    .sim-slider::-webkit-slider-thumb {
+      appearance: none; -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #ff6b35; cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,107,53,0.4);
+      transition: all 0.2s ease;
+    }
+    .sim-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 16px rgba(255,107,53,0.6);
+    }
+    .sim-slider::-moz-range-thumb {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #ff6b35; cursor: pointer; border: none;
+      box-shadow: 0 0 10px rgba(255,107,53,0.4);
+    }
+    .wind-compass {
+      width: 100%; display: flex; justify-content: center; margin-top: 8px;
+    }
+    .wind-arrow {
+      font-size: 24px; transition: transform 0.2s ease;
+    }
+    .sim-info {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,107,53,0.1);
+    }
+    .sim-info-value {
+      color: #ff6b35; font-weight: 700;
+    }
+    .spread-stages-info {
+      margin-top: 12px; padding: 10px; background: rgba(255,107,53,0.08);
+      border-radius: 6px; border-left: 3px solid #ff6b35;
+    }
+    .spread-stage-item {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
+      margin-bottom: 6px;
+    }
+    .spread-stage-item:last-child { margin-bottom: 0; }
+    .spread-stage-dot {
+      width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    }
+    .spread-stage-dot.stage0 { background: #cc3333; }
+    .spread-stage-dot.stage1 { background: #ff8800; }
+    .spread-stage-dot.stage2 { background: #ffff00; }
+
+    .evacuation-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 280px;
+      display: none;
+      max-height: 360px; overflow-y: auto;
+    }
+    .evacuation-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .evac-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+    .evac-list {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .evac-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 8px;
+      background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.15);
+      transition: all 0.2s ease;
+    }
+    .evac-item:hover {
+      background: rgba(255,107,53,0.12); border-color: rgba(255,107,53,0.25);
+      transform: translateX(2px);
+    }
+    .evac-rank {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+      color: #ff6b35; min-width: 20px; text-align: center;
+    }
+    .evac-content {
+      flex: 1;
+    }
+    .evac-name {
+      font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700;
+      color: #e6edf3;
+    }
+    .evac-score {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; margin-top: 2px;
+    }
+    .evac-badge {
+      padding: 2px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 700; white-space: nowrap;
+    }
+    .evac-badge.critical { background: rgba(255,0,0,0.2); color: #ff6b35; }
+    .evac-badge.high { background: rgba(255,165,0,0.2); color: #ffa500; }
+    .evac-badge.medium { background: rgba(255,255,0,0.2); color: #ffff00; }
+
+    .poi-popup {
+      background: rgba(13,17,23,0.95) !important;
+      border: 1px solid rgba(255,107,53,0.3) !important;
+      border-radius: 8px !important;
+      backdrop-filter: blur(8px);
+    }
+    .poi-popup .leaflet-popup-content {
+      color: #e6edf3;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .poi-popup .leaflet-popup-content-wrapper {
+      border-radius: 8px;
+      padding: 0 !important;
+    }
+    .poi-popup-inner {
+      padding: 10px 12px;
+    }
+    .poi-popup-title {
+      font-weight: 700; color: #ff6b35; margin-bottom: 6px;
+    }
+    .poi-popup-line {
+      display: flex; justify-content: space-between; margin-bottom: 4px;
+    }
+    .poi-popup-label { color: #8b949e; }
+    .poi-popup-value { color: #e6edf3; font-weight: 700; }
+
+    .route-comparison-panel {
+      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 380px;
+      display: none;
+    }
+    .route-comparison-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .route-comp-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+    .route-comp-table {
+      width: 100%; border-collapse: collapse;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    }
+    .route-comp-table td {
+      padding: 8px 10px; border-bottom: 1px solid rgba(255,107,53,0.1);
+    }
+    .route-comp-table td:first-child {
+      color: #8b949e; font-weight: 700; width: 35%;
+      border-right: 1px solid rgba(255,107,53,0.1);
+    }
+    .route-comp-table td:nth-child(2) {
+      color: #ff6b35; text-align: center; width: 32%;
+      border-right: 1px solid rgba(255,107,53,0.1);
+    }
+    .route-comp-table td:nth-child(3) {
+      color: #44ff88; text-align: center; font-weight: 700;
+    }
+    .route-comp-table tr:last-child td {
+      border-bottom: none;
+    }
+    .route-comp-label {
+      background: rgba(255,107,53,0.08);
+    }
+    .route-comp-label.safest {
+      background: rgba(68,255,136,0.08);
+    }
+    .route-comp-header {
+      background: rgba(255,107,53,0.12); font-weight: 700;
+    }
+
+    .risk-report-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 320px;
+      display: none;
+      max-height: 500px; overflow-y: auto;
+    }
+    .risk-report-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .risk-report-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+    .risk-metric {
+      margin-bottom: 14px; padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,107,53,0.1);
+    }
+    .risk-metric:last-child { border-bottom: none; }
+    .risk-metric-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+      color: #8b949e; margin-bottom: 4px;
+    }
+    .risk-metric-value {
+      font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700;
+      color: #e6edf3;
+    }
+    .risk-metric-bar {
+      width: 100%; height: 8px; border-radius: 4px;
+      background: rgba(255,107,53,0.1); margin-top: 6px; overflow: hidden;
+    }
+    .risk-metric-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(to right, #44ff88, #ffff00, #ff8800, #ff0000);
+      transition: width 0.3s ease;
+    }
+    .risk-alert {
+      margin-top: 12px; padding: 10px; border-radius: 6px;
+      background: rgba(255,0,0,0.15); border: 1px solid rgba(255,0,0,0.3);
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ff6b35;
+    }
+    .risk-alert.warning { background: rgba(255,165,0,0.15); border-color: rgba(255,165,0,0.3); }
+    .risk-alert.info { background: rgba(100,200,255,0.15); border-color: rgba(100,200,255,0.3); color: #64c8ff; }
+    .risk-zones-container {
+      margin-top: 12px;
+    }
+    .risk-zone-item {
+      padding: 8px; margin-bottom: 6px; border-radius: 6px;
+      background: rgba(255,107,53,0.08); border-left: 3px solid rgba(255,107,53,0.3);
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
+    }
+    .risk-zone-item.critical { border-left-color: #ff0000; background: rgba(255,0,0,0.1); }
+    .risk-zone-item.high { border-left-color: #ff8800; background: rgba(255,165,0,0.1); }
+    .risk-zone-item.medium { border-left-color: #ffff00; background: rgba(255,255,0,0.1); }
+
+    .spread-model-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 16px 20px; min-width: 340px;
+      display: none;
+      max-height: 520px; overflow-y: auto;
+    }
+    .spread-model-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .spread-model-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #ff6b35; margin-bottom: 14px; letter-spacing: 0.5px;
+    }
+    .spread-param-group {
+      margin-bottom: 14px; padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,107,53,0.1);
+    }
+    .spread-param-group:last-child { border-bottom: none; }
+    .spread-param-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+      color: #8b949e; display: flex; justify-content: space-between; margin-bottom: 6px;
+    }
+    .spread-param-value {
+      color: #ff6b35; font-weight: 700;
+    }
+    .spread-param-slider {
+      width: 100%; height: 6px; border-radius: 3px;
+      background: rgba(255,107,53,0.15); appearance: none;
+      -webkit-appearance: none; outline: none; cursor: pointer;
+    }
+    .spread-param-slider::-webkit-slider-thumb {
+      appearance: none; -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #ff6b35; cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,107,53,0.4);
+      transition: all 0.2s ease;
+    }
+    .spread-param-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 16px rgba(255,107,53,0.6);
+    }
+    .spread-param-slider::-moz-range-thumb {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #ff6b35; cursor: pointer; border: none;
+      box-shadow: 0 0 10px rgba(255,107,53,0.4);
+    }
+    .spread-calc-section {
+      margin-top: 14px; padding: 12px; border-radius: 8px;
+      background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.15);
+    }
+    .spread-calc-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+      color: #8b949e; margin-bottom: 8px; letter-spacing: 0.5px;
+    }
+    .spread-score-display {
+      font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 900;
+      color: #ff6b35; margin-bottom: 6px;
+    }
+    .spread-score-bar {
+      width: 100%; height: 12px; border-radius: 6px;
+      background: rgba(255,107,53,0.1); margin-bottom: 8px; overflow: hidden;
+    }
+    .spread-score-fill {
+      height: 100%; border-radius: 6px;
+      background: linear-gradient(to right, #00ff00, #ffff00, #ff8800, #ff0000);
+      transition: width 0.3s ease;
+    }
+    .spread-interpretation {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
+      line-height: 1.5;
+    }
+    .spread-interpretation-value {
+      color: #e6edf3; font-weight: 700;
+    }
+
+    .satellite-panel {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
+      border: 1px solid rgba(100,150,255,0.3); border-radius: 12px;
+      padding: 16px 20px; min-width: 280px;
+      display: none;
+    }
+    .satellite-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
+    .satellite-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+      color: #64a4ff; margin-bottom: 12px; letter-spacing: 0.5px;
+    }
+    .satellite-btn {
+      width: 100%; padding: 12px 14px; border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
+      background: rgba(100,150,255,0.15); border: 1.5px solid rgba(100,150,255,0.4);
+      color: #64a4ff; cursor: pointer; transition: all 0.25s ease;
+      letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+    .satellite-btn:hover {
+      background: rgba(100,150,255,0.25); border-color: rgba(100,150,255,0.6);
+      transform: translateY(-1px); box-shadow: 0 0 16px rgba(100,150,255,0.2);
+    }
+    .satellite-btn.active {
+      background: rgba(68,255,136,0.18); border-color: #44ff88;
+      color: #44ff88; box-shadow: 0 0 20px rgba(68,255,136,0.15);
+    }
+    .satellite-status {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e;
+      line-height: 1.6; padding: 10px; background: rgba(100,150,255,0.08);
+      border-radius: 6px; border-left: 3px solid #64a4ff;
+    }
+    .satellite-status-line {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    }
+    .satellite-status-line:last-child { margin-bottom: 0; }
+    .satellite-status-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      background: #64a4ff; opacity: 0.7;
+    }
+    .satellite-status-dot.active {
+      background: #44ff88; opacity: 1;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    .satellite-demo-note {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(100,150,255,0.1);
+      font-style: italic;
+    }
+
+    .panel-hint {
+      position: fixed; top: 20px; left: 20px; z-index: 500;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: #8b949e; background: rgba(13,17,23,0.8);
+      padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,107,53,0.2);
+      display: none; opacity: 0; transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    .panel-hint.visible {
+      display: block; opacity: 0.9;
+    }
+
+    .fullscreen-btn {
+      position: fixed; bottom: 20px; right: 20px; z-index: 999;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+      padding: 8px 14px; border-radius: 8px;
+      background: rgba(68,255,136,0.12); border: 1px solid rgba(68,255,136,0.3);
+      color: #44ff88; cursor: pointer; transition: all 0.25s ease;
+      letter-spacing: 0.5px;
+    }
+    .fullscreen-btn:hover {
+      background: rgba(68,255,136,0.2); border-color: rgba(68,255,136,0.5);
+      transform: translateY(-1px); box-shadow: 0 0 12px rgba(68,255,136,0.2);
+    }
+    .fullscreen-btn.active {
+      background: rgba(100,150,255,0.15); border-color: rgba(100,150,255,0.4);
+      color: #64a4ff;
+    }
+    .spread-time-critical {
+      margin-top: 12px; padding: 10px; border-radius: 6px;
+      background: rgba(255,0,0,0.15); border: 1px solid rgba(255,0,0,0.3);
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ff6b35;
+      text-align: center; font-weight: 700;
+    }
+    .spread-time-critical.warning {
+      background: rgba(255,165,0,0.15); border-color: rgba(255,165,0,0.3);
+      color: #ffa500;
+    }
+    .spread-time-critical.info {
+      background: rgba(100,200,255,0.15); border-color: rgba(100,200,255,0.3);
+      color: #64c8ff;
+    }
+    .spread-details-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;
+    }
+    .spread-detail-item {
+      padding: 8px; border-radius: 6px; background: rgba(255,107,53,0.05);
+      border: 1px solid rgba(255,107,53,0.1);
+    }
+    .spread-detail-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #8b949e;
+      margin-bottom: 3px;
+    }
+    .spread-detail-value {
+      font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700;
+      color: #ff6b35;
+    }
+
+    .stats-container {
+      position: absolute; top: 20px; left: 320px; right: 20px; z-index: 1000;
+      display: flex; gap: 12px; height: 80px;
+      animation: fadeSlideIn 0.5s ease 0.15s both;
+    }
+    .stat-card {
+      flex: 1; background: rgba(13,17,23,0.85); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.3); border-radius: 10px;
+      padding: 14px 16px; display: flex; flex-direction: column;
+      justify-content: space-between; transition: all 0.3s ease;
+      overflow: hidden; position: relative;
+    }
+    .stat-card:hover {
+      border-color: rgba(255,107,53,0.5); box-shadow: 0 0 20px rgba(255,107,53,0.1);
+      transform: translateY(-2px);
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(to right, transparent, #ff6b35, transparent);
+      opacity: 0;
+      animation: topLine 2s ease-in-out infinite;
+    }
+    @keyframes topLine {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+    .stat-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+      color: #8b949e; letter-spacing: 0.5px; text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 900;
+      color: #e6edf3; line-height: 1;
+    }
+    .stat-unit {
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #8b949e;
+      margin-top: 2px;
+    }
+    .stat-card.alert .stat-value {
+      color: #ff6b35;
+      animation: pulse-text 1s ease-in-out infinite;
+    }
+    @keyframes pulse-text {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .live-indicator {
+      display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #44ff88; box-shadow: 0 0 8px rgba(68,255,136,0.6);
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.7; }
+    }
+    .live-text {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+      color: #44ff88; letter-spacing: 1px;
+    }
+
+    .update-timestamp {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,107,53,0.1);
+    }
+    .update-timestamp-value {
+      color: #44ff88; font-weight: 700;
+    }
+
+    .event-log-panel {
+      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+      background: rgba(13,17,23,0.90); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
+      padding: 0; width: 320px; height: 220px;
+      display: flex; flex-direction: column;
+      animation: fadeSlideIn 0.5s ease 0.25s both;
+    }
+    .event-log-header {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
+      color: #ff6b35; padding: 12px 14px; border-bottom: 1px solid rgba(255,107,53,0.15);
+      letter-spacing: 0.5px; flex-shrink: 0;
+    }
+    .event-log-content {
+      flex: 1; overflow-y: auto; padding: 8px 0;
+      scrollbar-width: thin; scrollbar-color: rgba(255,107,53,0.3) rgba(255,107,53,0.1);
+    }
+    .event-log-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    .event-log-content::-webkit-scrollbar-track {
+      background: rgba(255,107,53,0.1);
+    }
+    .event-log-content::-webkit-scrollbar-thumb {
+      background: rgba(255,107,53,0.3); border-radius: 3px;
+    }
+    .event-log-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,107,53,0.5);
+    }
+    .event-log-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; margin: 0 6px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
+      border-radius: 6px; transition: all 0.2s ease;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .event-log-item.highlight {
+      background: rgba(255,255,0,0.15); color: #e6edf3;
+      animation: highlightPulse 1s ease;
+    }
+    @keyframes highlightPulse {
+      0%, 100% { background: rgba(255,255,0,0.15); }
+      50% { background: rgba(255,255,0,0.25); }
+    }
+    .event-log-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      box-shadow: 0 0 4px currentColor; opacity: 0.8;
+    }
+    .event-log-dot.critical {
+      background: #ff0000; color: #ff0000;
+    }
+    .event-log-dot.warning {
+      background: #ffff00; color: #ffff00;
+    }
+    .event-log-dot.info {
+      background: #44ff88; color: #44ff88;
+    }
+    .event-log-text {
+      flex: 1; overflow: hidden; text-overflow: ellipsis;
+    }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="https://cdn.tailwindcss.com/3.4.17" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js" type="text/javascript"></script>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body>
+  <div id="map"></div>
+  <div class="stats-container" id="statsContainer">
+   <div class="stat-card">
+    <div class="stat-label">
+     Analiz Edilen Alan
+    </div>
+    <div class="stat-value">
+     2.847
+    </div>
+    <div class="stat-unit">
+     km²
+    </div>
+   </div>
+   <div class="stat-card" id="populationCard">
+    <div class="stat-label">
+     Tehlike Altındaki Nüfus
+    </div>
+    <div class="stat-value" id="populationValue">
+     0
+    </div>
+    <div class="stat-unit">
+     kişi
+    </div>
+   </div>
+   <div class="stat-card" id="alertCard">
+    <div class="stat-label">
+     Aktif Uyarı
+    </div>
+    <div class="stat-value" id="activeAlertValue">
+     0
+    </div>
+    <div class="stat-unit">
+     POI
+    </div>
+   </div>
+   <div class="stat-card">
+    <div class="stat-label">
+     En Yüksek Risk
+    </div>
+    <div class="stat-value" id="maxRiskValue">
+     0.00
+    </div>
+    <div class="stat-unit">
+     risk skoru
+    </div>
+   </div>
+  </div>
+  <div class="panel-top-left">
+   <div class="live-indicator">
+    <div class="live-dot"></div>
+    <div class="live-text">
+     CANLI ANALİZ
+    </div>
+   </div>
+   <div class="panel-title" id="mainTitle">
+    EERIS+
+   </div>
+   <div class="panel-subtitle" id="subtitle">
+    Afet Karar Destek Sistemi
+   </div>
+   <div class="panel-accent-line"></div>
+   <div class="update-timestamp">
+    Son Güncellenme: <span class="update-timestamp-value" id="updateTimestamp">00:00:00</span>
+   </div>
+   <div class="update-timestamp" id="teamStatus" style="margin-top: 8px; color: #8b949e;">
+    Ekip Durumu: Hazır
+   </div>
+  </div>
+  <div class="time-slider-panel" id="timeSliderPanel">
+   <div class="time-label">
+    Saat: <span id="timeDisplay">14:00</span>
+   </div><input type="range" id="timeSlider" class="time-slider" min="6" max="23" value="14">
+   <div class="time-info"><span id="highRiskCount">Yüksek Riskli: 0</span>
+   </div>
+  </div>
+  <div class="toggle-panel">
+   <button class="toggle-btn" data-layer="risk">Risk</button> <button class="toggle-btn" data-layer="spread">Yayılım</button> <button class="toggle-btn" data-layer="poi">POI</button> <button class="toggle-btn" data-layer="route">Rota</button> <button class="toggle-btn" data-layer="spreadModel">Yayılma</button> <button class="toggle-btn" data-layer="report">Rapor</button>
+  </div>
+  <div class="coord-panel" id="coords">
+   <span>LAT</span> 37.2000 &nbsp; <span>LNG</span> 28.3000
+  </div>
+  <div class="legend-panel" id="legendPanel">
+   <div class="legend-title">
+    Risk Seviyesi
+   </div>
+   <div class="legend-gradient"></div>
+   <div class="legend-labels"><span>Düşük</span> <span>Yüksek</span>
+   </div>
+  </div>
+  <div class="panel-hint" id="panelHint">
+   F — Panelleri Göster
+  </div>
+  <div class="fullscreen-btn" id="fullscreenBtn">
+   ⛶ Tam Ekran Demo
+  </div>
+  <div class="simulation-panel" id="simulationPanel">
+   <div class="sim-title">
+    Simülasyon Kontrolü
+   </div>
+   <div class="sim-toggle" id="spreadForecastToggle">
+    <div class="sim-toggle-checkbox checked"></div>
+    <div class="sim-toggle-label">
+     Yayılım Tahmini (3 Aşama)
+    </div>
+   </div>
+   <div class="sim-control">
+    <div class="sim-label">
+     Rüzgar Hızı <span class="sim-label-value" id="windSpeedDisplay">45 km/h</span>
+    </div><input type="range" id="windSpeedSlider" class="sim-slider" min="0" max="80" value="45">
+   </div>
+   <div class="sim-control">
+    <div class="sim-label">
+     Rüzgar Yönü <span class="sim-label-value" id="windDirectionDisplay">45°</span>
+    </div><input type="range" id="windDirectionSlider" class="sim-slider" min="0" max="360" value="45">
+    <div class="wind-compass">
+     <div class="wind-arrow" id="windArrow">
+      ⬈
+     </div>
+    </div>
+   </div>
+   <div class="sim-info">
+    Yayılım Alanı: <span class="sim-info-value" id="spreadAreaDisplay">0.0 km²</span>
+   </div>
+   <div class="spread-stages-info">
+    <div class="spread-stage-item">
+     <div class="spread-stage-dot stage0"></div><span>T+0 (Mevcut)</span>
+    </div>
+    <div class="spread-stage-item">
+     <div class="spread-stage-dot stage1"></div><span>T+1 saat (%60 büyük)</span>
+    </div>
+    <div class="spread-stage-item">
+     <div class="spread-stage-dot stage2"></div><span>T+2 saat (%140 büyük)</span>
+    </div>
+   </div>
+  </div>
+  <div class="evacuation-panel" id="evacuationPanel">
+   <div class="evac-title" id="evacuationTitle">
+    Tahliye Öncelik Listesi
+   </div>
+   <div class="evac-list" id="evacuationList">
+   </div>
+  </div>
+  <div class="route-comparison-panel" id="routeComparisonPanel">
+   <div class="route-comp-title">
+    Rota Karşılaştırması
+   </div>
+   <table class="route-comp-table">
+    <tbody>
+     <tr class="route-comp-header">
+      <td></td>
+      <td>En Kısa</td>
+      <td>En Güvenli</td>
+     </tr>
+     <tr>
+      <td class="route-comp-label">Mesafe</td>
+      <td>34 km</td>
+      <td>47 km</td>
+     </tr>
+     <tr>
+      <td class="route-comp-label">Risk Skoru</td>
+      <td>0.87</td>
+      <td>0.19</td>
+     </tr>
+     <tr>
+      <td class="route-comp-label">Tahmini Süre</td>
+      <td>42 dk</td>
+      <td>58 dk</td>
+     </tr>
+     <tr>
+      <td class="route-comp-label safest">Yayılım Riski</td>
+      <td>Yüksek</td>
+      <td style="color: #44ff88;">Düşük</td>
+     </tr>
+    </tbody>
+   </table>
+  </div>
+  <div class="risk-report-panel" id="riskReportPanel">
+   <div class="risk-report-title" id="riskReportTitle">
+    Gerçek Zamanlı Risk Analizi
+   </div>
+   <div class="risk-metric">
+    <div class="risk-metric-label">
+     GENEL RİSK SEVİYESİ
+    </div>
+    <div class="risk-metric-value" id="riskLevelValue">
+     %65
+    </div>
+    <div class="risk-metric-bar">
+     <div class="risk-metric-fill" id="riskLevelBar" style="width: 65%;"></div>
+    </div>
+   </div>
+   <div class="risk-metric">
+    <div class="risk-metric-label">
+     YÜKSEK RİSK BÖLGESİ SAYISI
+    </div>
+    <div class="risk-metric-value" id="highRiskZoneCount">
+     0
+    </div>
+   </div>
+   <div class="risk-metric">
+    <div class="risk-metric-label">
+     UYARI DURUMU
+    </div>
+    <div class="risk-alert" id="riskAlertStatus">
+     Sistem Normal - Takip Et
+    </div>
+   </div>
+   <div class="risk-metric">
+    <div class="risk-metric-label">
+     RİSK BÖLGELERI
+    </div>
+    <div class="risk-zones-container" id="riskZonesContainer">
+     <div class="risk-zone-item critical">
+      🔴 Marmaris Bölgesi - %87 Risk
+     </div>
+     <div class="risk-zone-item high">
+      🟠 Bodrum Kıyısı - %72 Risk
+     </div>
+     <div class="risk-zone-item medium">
+      🟡 Orman Köyleri - %58 Risk
+     </div>
+    </div>
+   </div>
+   <div class="risk-metric">
+    <div class="risk-metric-label">
+     RÜZGâR ETKİSİ
+    </div>
+    <div class="risk-metric-value" id="windImpactValue" style="font-size: 12px; color: #8b949e;">
+     Kuzey 45°, 45 km/h
+    </div>
+   </div>
+   <div class="risk-alert info">
+    ℹ️ POI katmanını açarak insan yerleşim alanlarının risk durumunu görüntüleyin.
+   </div>
+  </div>
+  <div class="satellite-panel" id="satellitePanel">
+   <div class="satellite-title">
+    🛰️ GÖKTÜRK / İMECE
+   </div><button class="satellite-btn" id="satelliteBtn"> Yerli Uydu Verisini Bağla </button>
+   <div class="satellite-status" id="satelliteStatus">
+    <div class="satellite-status-line">
+     <div class="satellite-status-dot"></div><span>Bağlı değil</span>
+    </div>
+   </div>
+   <div class="satellite-demo-note">
+    Demo modunda simüle edilmektedir
+   </div>
+  </div>
+  <div class="event-log-panel" id="eventLogPanel">
+   <div class="event-log-header">
+    Sistem Olayları
+   </div>
+   <div class="event-log-content" id="eventLogContent">
+   </div>
+  </div>
+  <div class="spread-model-panel" id="spreadModelPanel">
+   <div class="spread-model-title" id="spreadModelTitle">
+    Yangın Yayılma Analizi
+   </div>
+   <div class="spread-param-group">
+    <div class="spread-param-label">
+     Rüzgar Hızı <span class="spread-param-value" id="spreadWindSpeedDisplay">30 km/h</span>
+    </div><input type="range" id="spreadWindSpeedSlider" class="spread-param-slider" min="10" max="80" value="30">
+   </div>
+   <div class="spread-param-group">
+    <div class="spread-param-label">
+     Nem Oranı <span class="spread-param-value" id="spreadHumidityDisplay">%35</span>
+    </div><input type="range" id="spreadHumiditySlider" class="spread-param-slider" min="5" max="90" value="35">
+   </div>
+   <div class="spread-param-group">
+    <div class="spread-param-label">
+     Orman Yoğunluğu <span class="spread-param-value" id="spreadDensityDisplay">%65</span>
+    </div><input type="range" id="spreadDensitySlider" class="spread-param-slider" min="20" max="95" value="65">
+   </div>
+   <div class="spread-param-group">
+    <div class="spread-param-label">
+     Sıcaklık Etkisi <span class="spread-param-value" id="spreadTemperatureDisplay">%45</span>
+    </div><input type="range" id="spreadTemperatureSlider" class="spread-param-slider" min="10" max="100" value="45">
+   </div>
+   <div class="spread-calc-section">
+    <div class="spread-calc-label">
+     🔥 YANGININ YAYILMA SKORU
+    </div>
+    <div class="spread-score-display" id="spreadScoreDisplay">
+     0.74
+    </div>
+    <div class="spread-score-bar">
+     <div class="spread-score-fill" id="spreadScoreFill" style="width: 74%;"></div>
+    </div>
+    <div class="spread-interpretation">
+     <strong>Yorumlama:</strong> Yangın <span class="spread-interpretation-value">ÇOK HIZLI</span> yayılıyor
+    </div>
+    <div class="spread-time-critical">
+     ⏱️ Müdahale Süresi: <span id="spreadTimeWindow">20 dakika</span>
+    </div>
+    <div class="spread-details-grid">
+     <div class="spread-detail-item">
+      <div class="spread-detail-label">
+       Saatlik Yayılma
+      </div>
+      <div class="spread-detail-value" id="spreadHourlyRate">
+       2.4 km²
+      </div>
+     </div>
+     <div class="spread-detail-item">
+      <div class="spread-detail-label">
+       Alev Yüksekliği
+      </div>
+      <div class="spread-detail-value" id="spreadFlameHeight">
+       18 m
+      </div>
+     </div>
+     <div class="spread-detail-item">
+      <div class="spread-detail-label">
+       Kritik Bölge
+      </div>
+      <div class="spread-detail-value" id="spreadCriticalArea">
+       6.2 km²
+      </div>
+     </div>
+     <div class="spread-detail-item">
+      <div class="spread-detail-label">
+       Tahliye Zamanı
+      </div>
+      <div class="spread-detail-value" id="spreadEvacuationTime">
+       18 dk
+      </div>
+     </div>
+    </div>
+   </div>
+   <div class="risk-alert info" style="margin-top: 12px;">
+    ℹ️ Yayılma Modeli: Rüzgar ve nem oranı ile yangının hızını tahmin eder. Düşük nem + yüksek rüzgar = hızlı yayılma
+   </div>
+  </div>
+  <script>
+    // POI (Points of Interest) data - Gerçek Muğla Bölgesi Konumları
+    const poiData = [
+      // === HASTANELER ===
+      { name: 'Muğla Eğitim Araştırma Hastanesi', type: 'Hastane', priority: 1.0, population: 5000, lat: 37.2153, lng: 28.3636 },
+      { name: 'Marmaris Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 3000, lat: 36.8555, lng: 28.2771 },
+      { name: 'Bodrum Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 2500, lat: 37.0344, lng: 27.4305 },
+      { name: 'Fethiye Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 2800, lat: 36.6556, lng: 29.1243 },
+      { name: 'Köyceğiz Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 1500, lat: 36.9728, lng: 28.6833 },
+      
+      // === İLÇE MERKEZLERİ (Okullar/İdari) ===
+      { name: 'Milas İlçe Merkezi', type: 'Okul', priority: 0.85, population: 1200, lat: 37.3167, lng: 27.7833 },
+      { name: 'Datça İlçe Merkezi', type: 'Okul', priority: 0.85, population: 800, lat: 36.7269, lng: 27.6908 },
+      { name: 'Ortaca İlçe Merkezi', type: 'Okul', priority: 0.85, population: 900, lat: 36.8333, lng: 28.7667 },
+      { name: 'Yatağan İlçe Merkezi', type: 'Okul', priority: 0.85, population: 1100, lat: 37.3333, lng: 28.1333 },
+      { name: 'Seydikemer Merkezi', type: 'Okul', priority: 0.85, population: 700, lat: 36.7500, lng: 29.0000 },
+      
+      // === ORMAN KÖYLERİ (2021 Yangın Bölgeleri) ===
+      { name: 'Turunç Köyü', type: 'Köy', priority: 0.70, population: 450, lat: 36.7700, lng: 28.2800 },
+      { name: 'Bayır Köyü', type: 'Köy', priority: 0.70, population: 380, lat: 36.9200, lng: 28.3500 },
+      { name: 'Hisarönü', type: 'Köy', priority: 0.70, population: 520, lat: 36.8100, lng: 28.1600 },
+      { name: 'Orhaniye Köyü', type: 'Köy', priority: 0.70, population: 420, lat: 36.9000, lng: 28.2200 },
+      { name: 'Selimiye Köyü', type: 'Köy', priority: 0.70, population: 360, lat: 36.8300, lng: 28.1900 },
+      { name: 'Çamlı Köyü', type: 'Köy', priority: 0.70, population: 410, lat: 36.8700, lng: 28.1700 },
+      { name: 'Çetibeli Köyü', type: 'Köy', priority: 0.70, population: 390, lat: 36.9300, lng: 28.2100 },
+      { name: 'Karaca Köyü', type: 'Köy', priority: 0.70, population: 440, lat: 36.9500, lng: 28.1500 },
+      { name: 'Karacasöğüt Köyü', type: 'Köy', priority: 0.70, population: 370, lat: 36.9500, lng: 28.1000 },
+      { name: 'Gökova Köyü', type: 'Köy', priority: 0.70, population: 480, lat: 37.0300, lng: 28.3500 },
+      { name: 'Kıran Köyü', type: 'Köy', priority: 0.70, population: 350, lat: 37.0500, lng: 28.3200 },
+      { name: 'Kuyucak Köyü', type: 'Köy', priority: 0.70, population: 400, lat: 37.0700, lng: 28.3000 },
+      { name: 'Sarnıç Köyü', type: 'Köy', priority: 0.70, population: 360, lat: 37.0200, lng: 28.4000 },
+      { name: 'Çiçekli Köyü', type: 'Köy', priority: 0.70, population: 430, lat: 37.1000, lng: 28.4500 },
+      { name: 'Armutçuk Köyü', type: 'Köy', priority: 0.70, population: 380, lat: 37.1200, lng: 28.4200 },
+      { name: 'Kıyra Köyü', type: 'Köy', priority: 0.70, population: 420, lat: 37.0800, lng: 28.4700 },
+      { name: 'Emecik Köyü', type: 'Köy', priority: 0.70, population: 340, lat: 36.7800, lng: 27.5800 },
+      { name: 'Kovanlık Köyü', type: 'Köy', priority: 0.70, population: 310, lat: 36.7500, lng: 27.6200 },
+      { name: 'Döğüşbelen Köyü', type: 'Köy', priority: 0.70, population: 390, lat: 37.0200, lng: 28.7000 },
+      { name: 'Hamitköy', type: 'Köy', priority: 0.70, population: 360, lat: 36.9500, lng: 28.7200 },
+      
+      // === AHIRLAR / ÇİFTLİKLER ===
+      { name: 'Kavaklıdere Çiftliği', type: 'Hayvancılık', priority: 0.55, population: 200, lat: 37.4333, lng: 28.3833 },
+      { name: 'Menteşe Ahırları', type: 'Hayvancılık', priority: 0.55, population: 180, lat: 37.1800, lng: 28.3000 },
+      { name: 'Çamarası Çiftliği', type: 'Hayvancılık', priority: 0.55, population: 160, lat: 37.0600, lng: 27.5500 },
+      { name: 'Sakar Ormanı Ahır', type: 'Hayvancılık', priority: 0.55, population: 140, lat: 37.0500, lng: 28.6000 },
+      { name: 'Yatağan Büyükbaş', type: 'Hayvancılık', priority: 0.55, population: 190, lat: 37.3500, lng: 28.1500 },
+      { name: 'Milas Küçükbaş', type: 'Hayvancılık', priority: 0.55, population: 170, lat: 37.2900, lng: 27.8200 }
+    ];
+
+    // Create POI icon
+    function createPoiIcon(type) {
+      let bgColor, symbol;
+      
+      switch(type) {
+        case 'Hastane':
+          bgColor = '#ff0000';
+          symbol = '+';
+          break;
+        case 'Okul':
+          bgColor = '#0066ff';
+          symbol = '🏢';
+          break;
+        case 'Köy':
+          bgColor = '#ffff00';
+          symbol = '🏘';
+          break;
+        case 'Hayvancılık':
+          bgColor = '#00ff00';
+          symbol = '•';
+          break;
+        default:
+          bgColor = '#888888';
+          symbol = '•';
+      }
+
+      const html = `<div style="
+        width: 24px; height: 24px; border-radius: 50%;
+        background: ${bgColor}; display: flex; align-items: center;
+        justify-content: center; color: ${type === 'Köy' ? '#000' : '#fff'};
+        font-size: 14px; font-weight: bold; border: 2px solid #fff;
+        box-shadow: 0 0 8px rgba(0,0,0,0.5);
+      ">${symbol}</div>`;
+
+      return L.divIcon({
+        html: html,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12]
+      });
+    }
+
+    // Calculate risk score based on nearby heatmap intensity
+    function calculateRiskScore(lat, lng) {
+      // Find closest risk point
+      let minDist = Infinity;
+      let closestIntensity = 0.5;
+      
+      riskPoints.forEach(point => {
+        const dist = Math.sqrt(Math.pow(point.lat - lat, 2) + Math.pow(point.lng - lng, 2));
+        if (dist < minDist) {
+          minDist = dist;
+          closestIntensity = point.baseIntensity;
+        }
+      });
+      
+      return Math.max(0.1, closestIntensity - (minDist * 0.2));
+    }
+
+    // Generate evacuation list
+    function generateEvacuationList(hour) {
+      return poiData
+        .map(poi => {
+          const riskIntensity = getIntensityAtHour(calculateRiskScore(poi.lat, poi.lng), hour);
+          const evacuationScore = (riskIntensity * poi.priority).toFixed(3);
+          
+          return {
+            ...poi,
+            riskIntensity,
+            evacuationScore: parseFloat(evacuationScore)
+          };
+        })
+        .sort((a, b) => b.evacuationScore - a.evacuationScore)
+        .slice(0, 5);
+    }
+
+    // Update evacuation list UI
+    function updateEvacuationList(hour) {
+      const list = generateEvacuationList(hour);
+      const listContainer = document.getElementById('evacuationList');
+      listContainer.innerHTML = '';
+      
+      list.forEach((poi, idx) => {
+        let badge = 'medium';
+        if (poi.evacuationScore >= 0.7) badge = 'critical';
+        else if (poi.evacuationScore >= 0.5) badge = 'high';
+        
+        const badgeText = badge === 'critical' ? 'KRİTİK' : (badge === 'high' ? 'YÜKSEK' : 'ORTA');
+        
+        const item = document.createElement('div');
+        item.className = 'evac-item';
+        item.innerHTML = `
+          <div class="evac-rank">${idx + 1}</div>
+          <div class="evac-content">
+            <div class="evac-name">${poi.name}</div>
+            <div class="evac-score">Score: ${poi.evacuationScore.toFixed(3)}</div>
+          </div>
+          <div class="evac-badge ${badge}">${badgeText}</div>
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    // Risk points data - 20 points around Muğla region
+    const riskPoints = [
+      { lat: 37.2, lng: 28.3, baseIntensity: 0.6 },      // Muğla center
+      { lat: 37.15, lng: 28.25, baseIntensity: 0.5 },    
+      { lat: 37.25, lng: 28.35, baseIntensity: 0.7 },    
+      { lat: 37.1, lng: 28.4, baseIntensity: 0.45 },     
+      { lat: 37.3, lng: 28.2, baseIntensity: 0.55 },     
+      { lat: 37.05, lng: 28.25, baseIntensity: 0.65 },   // Köyceğiz direction
+      { lat: 36.95, lng: 28.35, baseIntensity: 0.48 },   
+      { lat: 36.85, lng: 28.2, baseIntensity: 0.52 },    
+      { lat: 37.35, lng: 28.45, baseIntensity: 0.6 },    // Marmaris direction
+      { lat: 37.4, lng: 28.5, baseIntensity: 0.7 },      
+      { lat: 37.45, lng: 28.35, baseIntensity: 0.58 },   
+      { lat: 37.38, lng: 28.25, baseIntensity: 0.62 },   
+      { lat: 37.5, lng: 28.6, baseIntensity: 0.72 },     // Bodrum direction
+      { lat: 37.55, lng: 28.68, baseIntensity: 0.75 },   
+      { lat: 37.48, lng: 28.75, baseIntensity: 0.68 },   
+      { lat: 37.1, lng: 28.75, baseIntensity: 0.55 },    // Fethiye direction
+      { lat: 36.95, lng: 28.85, baseIntensity: 0.5 },    
+      { lat: 37.2, lng: 28.9, baseIntensity: 0.58 },     
+      { lat: 36.8, lng: 28.5, baseIntensity: 0.45 },     
+      { lat: 37.3, lng: 28.6, baseIntensity: 0.66 }      
+    ];
+
+    // Calculate intensity based on hour (peak 14:00-18:00)
+    function getIntensityAtHour(baseIntensity, hour) {
+      let factor = 1;
+      if (hour >= 14 && hour <= 18) {
+        factor = 1.3; // Peak hours
+      } else if (hour >= 12 && hour < 14) {
+        factor = 1.1; // Rising
+      } else if (hour >= 18 && hour <= 20) {
+        factor = 1.05; // Declining
+      } else if (hour >= 6 && hour < 12) {
+        factor = 0.4; // Morning low
+      } else {
+        factor = 0.3; // Evening/night low
+      }
+      return Math.min(baseIntensity * factor, 1.0);
+    }
+
+    // Generate heatmap data for current hour
+    function getHeatmapData(hour) {
+      return riskPoints.map(point => [
+        point.lat,
+        point.lng,
+        getIntensityAtHour(point.baseIntensity, hour)
+      ]);
+    }
+
+    // Count high-risk points (intensity > 0.7)
+    function countHighRiskPoints(hour) {
+      return riskPoints.filter(point => 
+        getIntensityAtHour(point.baseIntensity, hour) > 0.7
+      ).length;
+    }
+
+    // Map init
+    const map = L.map('map', {
+      center: [37.2, 28.3],
+      zoom: 10,
+      zoomControl: false
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Fire origin point and spread simulation
+    const fireOrigin = { lat: 37.45, lng: 28.35 };
+    let windSpeed = 45; // km/h
+    let windDirection = 45; // degrees
+    let ellipseLayer = null;
+    let fireMarkerLayer = null;
+    let poiMarkers = [];
+    
+    // Route data
+    const shortestRoute = {
+      name: 'En Kısa Rota',
+      start: { lat: 37.215, lng: 28.363 },
+      end: { lat: 36.966, lng: 28.683 },
+      waypoints: [
+        [37.215, 28.363],
+        [37.15, 28.45],
+        [37.05, 28.55],
+        [36.966, 28.683]
+      ],
+      color: '#ff4444',
+      dashArray: '8,6',
+      weight: 3,
+      distance: 34,
+      riskScore: 0.87,
+      time: 42,
+      spreadRisk: 'Yüksek'
+    };
+
+    const safestRoute = {
+      name: 'En Güvenli Rota',
+      start: { lat: 37.215, lng: 28.363 },
+      end: { lat: 36.966, lng: 28.683 },
+      waypoints: [
+        [37.215, 28.363],
+        [37.3, 28.25],
+        [37.35, 28.1],
+        [37.0, 27.95],
+        [36.85, 28.2],
+        [36.966, 28.683]
+      ],
+      color: '#44ff88',
+      dashArray: 'none',
+      weight: 4,
+      distance: 47,
+      riskScore: 0.19,
+      time: 58,
+      spreadRisk: 'Düşük'
+    };
+
+    let routeLayerGroup = null;
+    let shortestRouteLayer = null;
+    let safestRouteLayer = null;
+
+    // Create fire marker with pulsing animation
+    function createFireMarker() {
+      const svg = `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="10" cy="10" r="8" fill="#ff0000" class="fire-marker"/>
+        <circle cx="10" cy="10" r="6" fill="#ff6b35" opacity="0.7"/>
+      </svg>`;
+      const iconUrl = 'data:image/svg+xml;base64,' + btoa(svg);
+      return L.icon({
+        iconUrl: iconUrl,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+        popupAnchor: [0, -10]
+      });
+    }
+
+    function addFireMarker() {
+      if (fireMarkerLayer) map.removeLayer(fireMarkerLayer);
+      const marker = L.marker([fireOrigin.lat, fireOrigin.lng], { icon: createFireMarker() });
+      marker.bindPopup('🔥 Yangın Başlangıç Noktası', { className: 'fire-popup' });
+      marker.addTo(map);
+      fireMarkerLayer = marker;
+    }
+
+    // Calculate ellipse points based on wind speed and direction
+    function calculateEllipse(center, windSpeedKmh, windDirectionDeg, numPoints = 60) {
+      const majorAxis = 0.8 + (windSpeedKmh / 80) * 1.5; // 0.8-2.3 km
+      const minorAxis = 0.4 + (windSpeedKmh / 80) * 0.8;  // 0.4-1.2 km
+      
+      const centerLat = center.lat;
+      const centerLng = center.lng;
+      const radPerDeg = Math.PI / 180;
+      const windRad = windDirectionDeg * radPerDeg;
+      
+      const points = [];
+      for (let i = 0; i < numPoints; i++) {
+        const angle = (i / numPoints) * Math.PI * 2;
+        
+        // Ellipse in local coords
+        let x = majorAxis * Math.cos(angle);
+        let y = minorAxis * Math.sin(angle);
+        
+        // Rotate by wind direction
+        const rotX = x * Math.cos(windRad) - y * Math.sin(windRad);
+        const rotY = x * Math.sin(windRad) + y * Math.cos(windRad);
+        
+        // Convert to lat/lng (approximate)
+        const latOffset = rotY / 111; // 1 degree latitude ≈ 111 km
+        const lngOffset = rotX / (111 * Math.cos(centerLat * radPerDeg));
+        
+        points.push([centerLat + latOffset, centerLng + lngOffset]);
+      }
+      points.push(points[0]); // Close polygon
+      return points;
+    }
+
+    // Calculate spread area in km²
+    function calculateSpreadArea(windSpeedKmh) {
+      const majorAxis = 0.8 + (windSpeedKmh / 80) * 1.5;
+      const minorAxis = 0.4 + (windSpeedKmh / 80) * 0.8;
+      return (Math.PI * majorAxis * minorAxis).toFixed(2);
+    }
+
+    // Update ellipse on spread layer
+    function updateEllipse() {
+      if (ellipseLayerGroup) map.removeLayer(ellipseLayerGroup);
+      ellipseLayerGroup = L.layerGroup();
+
+      if (spreadForecastEnabled) {
+        // T+0 (Current) - Dark Red
+        const points0 = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.0);
+        const ellipse0 = L.polygon(points0, {
+          color: '#cc3333',
+          weight: 2,
+          opacity: 0.9,
+          fillColor: '#ff0000',
+          fillOpacity: 0.7,
+          lineDash: [5, 5]
+        }).addTo(ellipseLayerGroup);
+        
+        // Add T+0 label
+        const label0Pos = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.0, 1);
+        if (label0Pos.length > 0) {
+          const labelPoint0 = label0Pos[Math.floor(label0Pos.length * 0.25)];
+          const label0Icon = L.divIcon({
+            html: `<div style="background: #cc3333; color: #fff; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 0 4px rgba(0,0,0,0.6);">T+0</div>`,
+            iconSize: [30, 20],
+            iconAnchor: [15, 10]
+          });
+          L.marker(labelPoint0, { icon: label0Icon }).addTo(ellipseLayerGroup);
+        }
+
+        // T+1 (1 hour) - Orange, 60% larger
+        const points1 = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.6);
+        const ellipse1 = L.polygon(points1, {
+          color: '#ff8800',
+          weight: 2,
+          opacity: 0.8,
+          fillColor: '#ff8800',
+          fillOpacity: 0.45,
+          lineDash: [8, 4]
+        }).addTo(ellipseLayerGroup);
+        
+        // Add T+1 label
+        if (points1.length > 0) {
+          const labelPoint1 = points1[Math.floor(points1.length * 0.5)];
+          const label1Icon = L.divIcon({
+            html: `<div style="background: #ff8800; color: #000; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 0 4px rgba(0,0,0,0.6);">T+1h</div>`,
+            iconSize: [35, 20],
+            iconAnchor: [17, 10]
+          });
+          L.marker(labelPoint1, { icon: label1Icon }).addTo(ellipseLayerGroup);
+        }
+
+        // T+2 (2 hours) - Yellow, 140% larger
+        const points2 = calculateEllipse(fireOrigin, windSpeed, windDirection, 2.4);
+        const ellipse2 = L.polygon(points2, {
+          color: '#ffff00',
+          weight: 2,
+          opacity: 0.7,
+          fillColor: '#ffff00',
+          fillOpacity: 0.25
+        }).addTo(ellipseLayerGroup);
+        
+        // Add T+2 label
+        if (points2.length > 0) {
+          const labelPoint2 = points2[Math.floor(points2.length * 0.75)];
+          const label2Icon = L.divIcon({
+            html: `<div style="background: #ffff00; color: #000; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 0 4px rgba(0,0,0,0.6);">T+2h</div>`,
+            iconSize: [35, 20],
+            iconAnchor: [17, 10]
+          });
+          L.marker(labelPoint2, { icon: label2Icon }).addTo(ellipseLayerGroup);
+        }
+      } else {
+        // Only T+0 (Current)
+        const points0 = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.0);
+        const ellipse0 = L.polygon(points0, {
+          color: '#ff0000',
+          weight: 2,
+          opacity: 0.8,
+          fillColor: '#ff6b35',
+          fillOpacity: 0.25,
+          lineDash: [5, 5]
+        }).addTo(ellipseLayerGroup);
+      }
+
+      ellipseLayerGroup.addTo(map);
+      
+      const area = calculateSpreadArea(windSpeed);
+      document.getElementById('spreadAreaDisplay').textContent = area + ' km²';
+      
+      // Update POI markers if visible
+      if (document.querySelector('.toggle-btn[data-layer="poi"]').classList.contains('active')) {
+        addPoiMarkers();
+      }
+    }
+
+    // Add POI markers to map
+    function addPoiMarkers() {
+      poiMarkers.forEach(marker => map.removeLayer(marker));
+      poiMarkers = [];
+
+      const currentHour = parseInt(document.getElementById('timeSlider').value);
+
+      poiData.forEach(poi => {
+        const riskScore = calculateRiskScore(poi.lat, poi.lng);
+        const riskIntensity = getIntensityAtHour(riskScore, currentHour);
+        
+        // Get POI risk stage for spread zones
+        const riskStage = getPOIRiskStage(poi);
+        
+        let borderColor = '#888';
+        if (riskStage === 0) {
+          borderColor = '#ff0000'; // Red for T+0
+        } else if (riskStage === 1) {
+          borderColor = '#ff8800'; // Orange for T+1
+        } else if (riskStage === 2) {
+          borderColor = '#ffff00'; // Yellow for T+2
+        }
+        
+        const iconHtml = `<div style="
+          width: 24px; height: 24px; border-radius: 50%;
+          background: ${getPoiColor(poi.type)}; display: flex; align-items: center;
+          justify-content: center; color: ${poi.type === 'Köy' ? '#000' : '#fff'};
+          font-size: 14px; font-weight: bold; border: 3px solid ${borderColor};
+          box-shadow: 0 0 8px rgba(0,0,0,0.5);
+        ">${getPoiSymbol(poi.type)}</div>`;
+
+        const marker = L.marker([poi.lat, poi.lng], { 
+          icon: L.divIcon({
+            html: iconHtml,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+            popupAnchor: [0, -12]
+          })
+        });
+        
+        const stageText = riskStage === 0 ? ' [T+0]' : (riskStage === 1 ? ' [T+1]' : (riskStage === 2 ? ' [T+2]' : ''));
+        
+        const popupContent = `
+          <div class="poi-popup-inner">
+            <div class="poi-popup-title">${poi.name}${stageText}</div>
+            <div class="poi-popup-line">
+              <span class="poi-popup-label">Tür:</span>
+              <span class="poi-popup-value">${poi.type}</span>
+            </div>
+            <div class="poi-popup-line">
+              <span class="poi-popup-label">Öncelik:</span>
+              <span class="poi-popup-value">${(poi.priority * 100).toFixed(0)}%</span>
+            </div>
+            <div class="poi-popup-line">
+              <span class="poi-popup-label">Nüfus:</span>
+              <span class="poi-popup-value">${poi.population}</span>
+            </div>
+            <div class="poi-popup-line">
+              <span class="poi-popup-label">Risk Skoru:</span>
+              <span class="poi-popup-value">${(riskIntensity * 100).toFixed(1)}%</span>
+            </div>
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent, { className: 'poi-popup', maxWidth: 200 });
+        marker.addTo(map);
+        poiMarkers.push(marker);
+      });
+    }
+
+    function getPoiColor(type) {
+      switch(type) {
+        case 'Hastane': return '#ff0000';
+        case 'Okul': return '#0066ff';
+        case 'Köy': return '#ffff00';
+        case 'Hayvancılık': return '#00ff00';
+        default: return '#888888';
+      }
+    }
+
+    function getPoiSymbol(type) {
+      switch(type) {
+        case 'Hastane': return '+';
+        case 'Okul': return '🏢';
+        case 'Köy': return '🏘';
+        case 'Hayvancılık': return '•';
+        default: return '•';
+      }
+    }
+    const windSpeedSlider = document.getElementById('windSpeedSlider');
+    const windDirectionSlider = document.getElementById('windDirectionSlider');
+    const windSpeedDisplay = document.getElementById('windSpeedDisplay');
+    const windDirectionDisplay = document.getElementById('windDirectionDisplay');
+    const windArrow = document.getElementById('windArrow');
+    const simulationPanel = document.getElementById('simulationPanel');
+
+    windSpeedSlider.addEventListener('input', (e) => {
+      windSpeed = parseInt(e.target.value);
+      windSpeedDisplay.textContent = windSpeed + ' km/h';
+      if (simulationPanel.classList.contains('active')) {
+        updateEllipse();
+      }
+    });
+
+    windDirectionSlider.addEventListener('input', (e) => {
+      windDirection = parseInt(e.target.value);
+      windDirectionDisplay.textContent = windDirection + '°';
+      windArrow.style.transform = `rotate(${windDirection}deg)`;
+      if (simulationPanel.classList.contains('active')) {
+        updateEllipse();
+      }
+    });
+
+    // Vehicle marker and animation variables
+    let vehicleMarker = null;
+    let vehicleAnimationFrame = null;
+    let vehicleProgress = 0;
+    let vehicleStartTime = null;
+    let teamStatusElement = null;
+    const VEHICLE_TRAVEL_TIME = 20000; // 20 seconds for full route
+
+    // Spread ellipses layers
+    let ellipseLayerGroup = null;
+    let spreadForecastEnabled = true;
+
+    // Check if point is inside ellipse
+    function isPointInEllipse(point, center, windSpeedKmh, windDirectionDeg, timeMultiplier = 1) {
+      const majorAxis = (0.8 + (windSpeedKmh / 80) * 1.5) * timeMultiplier;
+      const minorAxis = (0.4 + (windSpeedKmh / 80) * 0.8) * timeMultiplier;
+      
+      const centerLat = center.lat;
+      const centerLng = center.lng;
+      const radPerDeg = Math.PI / 180;
+      const windRad = windDirectionDeg * radPerDeg;
+      
+      // Convert point to local coordinates relative to fire origin
+      const latDiff = point.lat - centerLat;
+      const lngDiff = point.lng - centerLng;
+      
+      // Convert to km (approximate)
+      const yLocal = latDiff * 111;
+      const xLocal = lngDiff * 111 * Math.cos(centerLat * radPerDeg);
+      
+      // Rotate back by wind direction to get ellipse coordinates
+      const rotX = xLocal * Math.cos(-windRad) - yLocal * Math.sin(-windRad);
+      const rotY = xLocal * Math.sin(-windRad) + yLocal * Math.cos(-windRad);
+      
+      // Check if point is inside ellipse
+      const ellipseCheck = (rotX * rotX) / (majorAxis * majorAxis) + (rotY * rotY) / (minorAxis * minorAxis);
+      return ellipseCheck <= 1;
+    }
+
+    // Get risk stage for POI (0=current, 1=1hour, 2=2hours, null=outside all)
+    function getPOIRiskStage(poi) {
+      if (isPointInEllipse(poi, fireOrigin, windSpeed, windDirection, 1.0)) {
+        return 0; // Stage 0 (T+0)
+      } else if (isPointInEllipse(poi, fireOrigin, windSpeed, windDirection, 1.6)) {
+        return 1; // Stage 1 (T+1)
+      } else if (isPointInEllipse(poi, fireOrigin, windSpeed, windDirection, 2.4)) {
+        return 2; // Stage 2 (T+2)
+      }
+      return null;
+    }
+
+    // Get position along path based on progress (0-1)
+    function getPositionAlongPath(waypoints, progress) {
+      const totalDistance = waypoints.length - 1;
+      const segmentIndex = Math.floor(progress * totalDistance);
+      const segmentProgress = (progress * totalDistance) % 1;
+      
+      if (segmentIndex >= waypoints.length - 1) {
+        return waypoints[waypoints.length - 1];
+      }
+      
+      const from = waypoints[segmentIndex];
+      const to = waypoints[segmentIndex + 1];
+      
+      const lat = from[0] + (to[0] - from[0]) * segmentProgress;
+      const lng = from[1] + (to[1] - from[1]) * segmentProgress;
+      
+      return [lat, lng];
+    }
+
+    // Calculate angle for vehicle icon rotation
+    function getAngleAlongPath(waypoints, progress) {
+      const totalDistance = waypoints.length - 1;
+      let segmentIndex = Math.floor(progress * totalDistance);
+      
+      if (segmentIndex >= waypoints.length - 1) {
+        segmentIndex = waypoints.length - 2;
+      }
+      
+      const from = waypoints[segmentIndex];
+      const to = waypoints[Math.min(segmentIndex + 1, waypoints.length - 1)];
+      
+      return Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
+    }
+
+    // Animate vehicle along safest route
+    function animateVehicle() {
+      if (!vehicleMarker || !toggleState.route) return;
+      
+      const now = Date.now();
+      if (!vehicle) 
