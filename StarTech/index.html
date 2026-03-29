@@ -722,12 +722,15 @@ input[type=range]::-moz-range-thumb {
 </div><!-- /ui -->
 
 <script>
-  const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8000';
 let apiData = { riskMap: [], route: [], spread: [], roads: [] };
 
+let fetchPending = false;
 async function fetchAllData() {
+  if (fetchPending) return;
+  fetchPending = true;
   addEvent('API bağlantısı kuruluyor...', 'info');
-  try {
+  try { 
     const [riskRes, routeRes, spreadRes, roadsRes] = await Promise.all([
       fetch(`${API_BASE}/risk-map`),
       fetch(`${API_BASE}/route`),
@@ -745,9 +748,10 @@ async function fetchAllData() {
     applySpreadData();
   } catch (err) {
     addEvent('API bağlantı hatası – simülasyon verisi kullanılıyor', 'warn');
+  } finally {
+    fetchPending = false;
   }
 }
-
 function applyRiskMapData() {
   if (!apiData.riskMap.length) return;
   apiData.riskMap.forEach(ap => {

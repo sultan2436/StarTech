@@ -74,7 +74,7 @@ def is_data_fresh():
     if last_updated is None:
         return False
 
-    fark = (datetime.now() - last_updated).seconds / 60
+    fark = (datetime.now() - last_updated).total_seconds() / 60
     print(f"Son güncelleme: {fark:.0f} dakika önce")
     return fark < 10
 

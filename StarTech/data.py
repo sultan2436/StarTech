@@ -4,6 +4,9 @@ from database import save_to_db, load_from_db, is_data_fresh
 from database import save_roads_to_db, load_roads_from_db
 import math
 import time
+import threading
+_data_lock = threading.Lock()
+_data_cache = None
 
 API_KEY = "9f87fe7461a186ff53ea6ee6806e40f3"
 
@@ -115,36 +118,43 @@ def calculate_slope(lat, lon):
 
 
 def get_dataset():
-    if is_data_fresh():
-        print("Veritabanından yüklendi")
-        return load_from_db()
-
-   
-    print("OpenWeather + Elevation'dan çekiliyor...")
-    fresh = []
-    for poi in MUGLA_POIS:
-        weather    = fetch_weather(poi["lat"], poi["lon"])
-        slope_data = calculate_slope(poi["lat"], poi["lon"])
-        time.sleep(0.3)
+    global _data_cache
+    
+    with _data_lock:
+        if _data_cache is not None:
+            return _data_cache
         
-        fresh.append({
-            "name":        poi["name"],
-            "lat":         poi["lat"],
-            "lon":         poi["lon"],
-            "poi_type":    poi["poi_type"],
-            "vegetation":  poi["vegetation"],
-            "temperature": weather["temperature"],
-            "humidity":    weather["humidity"],
-            "wind":        weather["wind"],
-            "light":       weather["light"],
-            "elevation":   slope_data["elevation"],
-            "slope_deg":   slope_data["slope_deg"],
-            "slope_risk":  slope_data["slope_risk"],
-        })
-        print(f"  {poi['name']} → {weather['temperature']}°C | eğim: {slope_data['slope_deg']}°")
+        if is_data_fresh():
+            print("Veritabanından yüklendi")
+            _data_cache = load_from_db()
+            return _data_cache
 
-    save_to_db(fresh)
-    return fresh
+        print("OpenWeather + Elevation'dan çekiliyor...")
+        fresh = []
+        for poi in MUGLA_POIS:
+            weather    = fetch_weather(poi["lat"], poi["lon"])
+            slope_data = calculate_slope(poi["lat"], poi["lon"])
+            time.sleep(0.3)
+            
+            fresh.append({
+                "name":        poi["name"],
+                "lat":         poi["lat"],
+                "lon":         poi["lon"],
+                "poi_type":    poi["poi_type"],
+                "vegetation":  poi["vegetation"],
+                "temperature": weather["temperature"],
+                "humidity":    weather["humidity"],
+                "wind":        weather["wind"],
+                "light":       weather["light"],
+                "elevation":   slope_data["elevation"],
+                "slope_deg":   slope_data["slope_deg"],
+                "slope_risk":  slope_data["slope_risk"],
+            })
+            print(f"  {poi['name']} → {weather['temperature']}°C | eğim: {slope_data['slope_deg']}°")
+
+        save_to_db(fresh)
+        _data_cache = fresh
+        return fresh
 
 
 def get_roads():
