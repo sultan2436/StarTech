@@ -1,1706 +1,1395 @@
-<!doctype html>
-<html lang="tr" class="h-full">
- <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EERIS+ Afet Karar Destek Sistemi</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
-  <script src="https://unpkg.com/leaflet-ellipse@0.0.7/L.Ellipse.umd.js"></script>
-  <script src="/_sdk/element_sdk.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@300;500;700;900&amp;display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; width: 100%; overflow: hidden; background: #0d1117; }
-    #map { width: 100%; height: 100%; z-index: 1; }
-    .leaflet-control-zoom { display: none; }
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EERIS+ Afet Karar Destek Sistemi</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════════ */
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:#0a0e14; }
 
-    .panel-top-left {
-      position: absolute; top: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 14px;
-      padding: 20px 28px; min-width: 260px;
-    }
-    .panel-title {
-      font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 32px;
-      color: #ff6b35; letter-spacing: 2px; line-height: 1;
-    }
-    .panel-subtitle {
-      font-family: 'Outfit', sans-serif; font-weight: 300; font-size: 13px;
-      color: #8b949e; margin-top: 6px; letter-spacing: 0.5px;
-    }
-    .panel-accent-line {
-      width: 40px; height: 3px; background: #ff6b35; border-radius: 2px; margin-top: 10px;
-    }
+#map { position:absolute; inset:0; z-index:1; }
+.leaflet-control-zoom,
+.leaflet-control-attribution { display:none !important; }
 
-    .toggle-panel {
-      position: absolute; top: 20px; right: 20px; z-index: 1000;
-      display: flex; gap: 8px;
-    }
-    .toggle-btn {
-      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
-      padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(255,107,53,0.25);
-      background: rgba(13,17,23,0.85); color: #8b949e; cursor: pointer;
-      transition: all 0.25s ease; user-select: none; letter-spacing: 0.5px;
-    }
-    .toggle-btn:hover { border-color: #ff6b35; color: #e6edf3; transform: translateY(-1px); }
-    .toggle-btn.active {
-      background: rgba(255,107,53,0.18); color: #ff6b35;
-      border-color: #ff6b35; box-shadow: 0 0 20px rgba(255,107,53,0.15);
-    }
+/* ═══════════════════════════════════════════════════
+   UI SHELL  –  absolute overlay, 3-column grid
+═══════════════════════════════════════════════════ */
+#ui {
+  position:absolute; inset:0; z-index:100;
+  display:grid;
+  grid-template-columns: 278px 1fr 316px;
+  grid-template-rows: 88px 1fr 36px;
+  pointer-events:none;
+}
+#ui > * { pointer-events:all; }
 
-    .coord-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.85); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,107,53,0.15); border-radius: 8px;
-      padding: 8px 14px; font-family: 'JetBrains Mono', monospace;
-      font-size: 11px; color: #8b949e;
-    }
-    .coord-panel span { color: #ff6b35; }
+/* ═══════════════════════════════════════════════════
+   GLASS CARDS
+═══════════════════════════════════════════════════ */
+.glass {
+  background:rgba(10,14,20,.88);
+  backdrop-filter:blur(14px);
+  border:1px solid rgba(255,107,53,.18);
+  border-radius:12px;
+}
+.pad { padding:14px 16px; }
 
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .panel-top-left { animation: fadeSlideIn 0.5s ease; }
-    .toggle-panel { animation: fadeSlideIn 0.5s ease 0.1s both; }
-    .coord-panel { animation: fadeSlideIn 0.5s ease 0.2s both; }
+/* ═══════════════════════════════════════════════════
+   TOP BAR  (row 1, full width)
+═══════════════════════════════════════════════════ */
+#topbar {
+  grid-column:1/-1; grid-row:1;
+  display:flex; align-items:stretch; gap:10px;
+  padding:10px 12px;
+}
 
-    .time-slider-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 240px;
-      display: none;
-    }
-    .time-slider-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .time-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 8px; letter-spacing: 0.5px;
-    }
-    .time-slider {
-      width: 100%; height: 6px; border-radius: 3px;
-      background: rgba(255,107,53,0.15); appearance: none;
-      -webkit-appearance: none; outline: none; cursor: pointer;
-    }
-    .time-slider::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      width: 16px; height: 16px; border-radius: 50%;
-      background: #ff6b35; cursor: pointer;
-      box-shadow: 0 0 12px rgba(255,107,53,0.4);
-      transition: all 0.2s ease;
-    }
-    .time-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 0 20px rgba(255,107,53,0.6);
-    }
-    .time-slider::-moz-range-thumb {
-      width: 16px; height: 16px; border-radius: 50%;
-      background: #ff6b35; cursor: pointer; border: none;
-      box-shadow: 0 0 12px rgba(255,107,53,0.4);
-      transition: all 0.2s ease;
-    }
-    .time-slider::-moz-range-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 0 20px rgba(255,107,53,0.6);
-    }
-    .time-info {
-      display: flex; justify-content: space-between; margin-top: 10px;
-      font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8b949e;
-    }
-    .time-info span:first-child { color: #ff6b35; font-weight: 700; }
+/* Logo */
+#logo-panel {
+  min-width:240px; flex-shrink:0;
+  display:flex; flex-direction:column; justify-content:center;
+  padding:0 20px;
+}
+.live-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:'JetBrains Mono',monospace; font-size:10px;
+  font-weight:700; color:#44ff88; letter-spacing:1.5px; margin-bottom:4px;
+}
+.live-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:#44ff88; box-shadow:0 0 8px #44ff88;
+  animation:blink 1.4s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.55;transform:scale(1.2)} }
 
-    .legend-panel {
-      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 220px;
-      display: none;
-    }
-    .legend-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .legend-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
-    }
-    .legend-gradient {
-      width: 100%; height: 24px; border-radius: 6px;
-      background: linear-gradient(to right, #00ff00, #ffff00, #ff8800, #ff0000);
-      margin-bottom: 8px; box-shadow: 0 0 15px rgba(255,107,53,0.2);
-    }
-    .legend-labels {
-      display: flex; justify-content: space-between;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e;
-    }
+.logo-title { font-family:'Outfit',sans-serif; font-weight:900; font-size:34px; color:#ff6b35; letter-spacing:2px; line-height:1; }
+.logo-sub   { font-family:'Outfit',sans-serif; font-weight:300; font-size:12px; color:#6b7280; margin-top:3px; }
+.logo-bar   { width:36px; height:2.5px; background:#ff6b35; border-radius:2px; margin-top:7px; }
+.logo-ts    { font-family:'JetBrains Mono',monospace; font-size:10px; color:#4b5563; margin-top:6px; }
+.logo-ts span { color:#44ff88; font-weight:700; }
 
-    @keyframes pulse {
-      0%, 100% { r: 8px; opacity: 1; }
-      50% { r: 12px; opacity: 0.6; }
-    }
-    .fire-marker { animation: pulse 1.2s ease-in-out infinite; }
+/* Stat cards */
+.stat-card {
+  flex:1; display:flex; flex-direction:column; justify-content:center;
+  padding:10px 18px; position:relative; overflow:hidden;
+  transition:transform .2s, box-shadow .2s;
+}
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 0 22px rgba(255,107,53,.12); }
+.stat-card::after {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,#ff6b35,transparent);
+  opacity:0; animation:topglow 2.5s ease-in-out infinite;
+}
+@keyframes topglow { 0%,100%{opacity:0} 50%{opacity:1} }
+.stat-label { font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; color:#6b7280; letter-spacing:.8px; text-transform:uppercase; margin-bottom:6px; }
+.stat-value { font-family:'Outfit',sans-serif; font-weight:900; font-size:26px; color:#e6edf3; line-height:1; }
+.stat-unit  { font-family:'JetBrains Mono',monospace; font-size:9px; color:#4b5563; margin-top:3px; }
+.stat-card.danger .stat-value { color:#ff6b35; animation:pval 1s ease-in-out infinite; }
+@keyframes pval { 0%,100%{opacity:1} 50%{opacity:.5} }
 
-    .simulation-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 280px;
-      display: none;
-      max-height: 420px; overflow-y: auto;
-    }
-    .simulation-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .sim-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
-    }
-    .sim-control {
-      margin-bottom: 14px;
-    }
-    .sim-toggle {
-      display: flex; align-items: center; gap: 10px; padding: 10px;
-      background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.15);
-      border-radius: 8px; margin-bottom: 14px; cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .sim-toggle:hover {
-      background: rgba(255,107,53,0.12); border-color: rgba(255,107,53,0.25);
-    }
-    .sim-toggle-checkbox {
-      width: 18px; height: 18px; border-radius: 4px;
-      background: rgba(255,107,53,0.2); border: 1px solid rgba(255,107,53,0.4);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: all 0.2s ease;
-    }
-    .sim-toggle-checkbox.checked {
-      background: #ff6b35; border-color: #ff6b35;
-    }
-    .sim-toggle-checkbox.checked::after {
-      content: '✓'; color: #0d1117; font-weight: 700; font-size: 12px;
-    }
-    .sim-toggle-label {
-      flex: 1; font-family: 'JetBrains Mono', monospace;
-      font-size: 11px; font-weight: 700; color: #8b949e;
-    }
-    .sim-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-      color: #8b949e; display: flex; justify-content: space-between; margin-bottom: 6px;
-    }
-    .sim-label-value {
-      color: #ff6b35;
-    }
-    .sim-slider {
-      width: 100%; height: 6px; border-radius: 3px;
-      background: rgba(255,107,53,0.15); appearance: none;
-      -webkit-appearance: none; outline: none; cursor: pointer;
-    }
-    .sim-slider::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #ff6b35; cursor: pointer;
-      box-shadow: 0 0 10px rgba(255,107,53,0.4);
-      transition: all 0.2s ease;
-    }
-    .sim-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.15);
-      box-shadow: 0 0 16px rgba(255,107,53,0.6);
-    }
-    .sim-slider::-moz-range-thumb {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #ff6b35; cursor: pointer; border: none;
-      box-shadow: 0 0 10px rgba(255,107,53,0.4);
-    }
-    .wind-compass {
-      width: 100%; display: flex; justify-content: center; margin-top: 8px;
-    }
-    .wind-arrow {
-      font-size: 24px; transition: transform 0.2s ease;
-    }
-    .sim-info {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e;
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,107,53,0.1);
-    }
-    .sim-info-value {
-      color: #ff6b35; font-weight: 700;
-    }
-    .spread-stages-info {
-      margin-top: 12px; padding: 10px; background: rgba(255,107,53,0.08);
-      border-radius: 6px; border-left: 3px solid #ff6b35;
-    }
-    .spread-stage-item {
-      display: flex; align-items: center; gap: 8px;
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
-      margin-bottom: 6px;
-    }
-    .spread-stage-item:last-child { margin-bottom: 0; }
-    .spread-stage-dot {
-      width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
-    }
-    .spread-stage-dot.stage0 { background: #cc3333; }
-    .spread-stage-dot.stage1 { background: #ff8800; }
-    .spread-stage-dot.stage2 { background: #ffff00; }
+/* Toggle buttons */
+#toggles { display:flex; align-items:center; gap:7px; padding:0 2px; flex-shrink:0; }
+.tbtn {
+  font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+  padding:8px 15px; border-radius:9px;
+  border:1.5px solid rgba(255,107,53,.2);
+  background:rgba(10,14,20,.7); color:#6b7280;
+  cursor:pointer; transition:all .2s; white-space:nowrap;
+}
+.tbtn:hover { border-color:#ff6b35; color:#e6edf3; transform:translateY(-1px); }
+.tbtn.on { background:rgba(255,107,53,.15); color:#ff6b35; border-color:#ff6b35; box-shadow:0 0 18px rgba(255,107,53,.15); }
 
-    .evacuation-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 280px;
-      display: none;
-      max-height: 360px; overflow-y: auto;
-    }
-    .evacuation-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .evac-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
-    }
-    .evac-list {
-      display: flex; flex-direction: column; gap: 8px;
-    }
-    .evac-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 10px; border-radius: 8px;
-      background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.15);
-      transition: all 0.2s ease;
-    }
-    .evac-item:hover {
-      background: rgba(255,107,53,0.12); border-color: rgba(255,107,53,0.25);
-      transform: translateX(2px);
-    }
-    .evac-rank {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-      color: #ff6b35; min-width: 20px; text-align: center;
-    }
-    .evac-content {
-      flex: 1;
-    }
-    .evac-name {
-      font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700;
-      color: #e6edf3;
-    }
-    .evac-score {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; margin-top: 2px;
-    }
-    .evac-badge {
-      padding: 2px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;
-      font-size: 10px; font-weight: 700; white-space: nowrap;
-    }
-    .evac-badge.critical { background: rgba(255,0,0,0.2); color: #ff6b35; }
-    .evac-badge.high { background: rgba(255,165,0,0.2); color: #ffa500; }
-    .evac-badge.medium { background: rgba(255,255,0,0.2); color: #ffff00; }
+/* ═══════════════════════════════════════════════════
+   LEFT SIDEBAR  (col 1, rows 2-3)
+═══════════════════════════════════════════════════ */
+#sidebar {
+  grid-column:1; grid-row:2/4;
+  display:flex; flex-direction:column; gap:10px;
+  padding:0 10px 10px 12px;
+  overflow-y:auto; scrollbar-width:none;
+}
+#sidebar::-webkit-scrollbar { display:none; }
 
-    .poi-popup {
-      background: rgba(13,17,23,0.95) !important;
-      border: 1px solid rgba(255,107,53,0.3) !important;
-      border-radius: 8px !important;
-      backdrop-filter: blur(8px);
-    }
-    .poi-popup .leaflet-popup-content {
-      color: #e6edf3;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    .poi-popup .leaflet-popup-content-wrapper {
-      border-radius: 8px;
-      padding: 0 !important;
-    }
-    .poi-popup-inner {
-      padding: 10px 12px;
-    }
-    .poi-popup-title {
-      font-weight: 700; color: #ff6b35; margin-bottom: 6px;
-    }
-    .poi-popup-line {
-      display: flex; justify-content: space-between; margin-bottom: 4px;
-    }
-    .poi-popup-label { color: #8b949e; }
-    .poi-popup-value { color: #e6edf3; font-weight: 700; }
+.panel-title { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#ff6b35; letter-spacing:.5px; margin-bottom:12px; }
 
-    .route-comparison-panel {
-      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 380px;
-      display: none;
-    }
-    .route-comparison-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .route-comp-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
-    }
-    .route-comp-table {
-      width: 100%; border-collapse: collapse;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px;
-    }
-    .route-comp-table td {
-      padding: 8px 10px; border-bottom: 1px solid rgba(255,107,53,0.1);
-    }
-    .route-comp-table td:first-child {
-      color: #8b949e; font-weight: 700; width: 35%;
-      border-right: 1px solid rgba(255,107,53,0.1);
-    }
-    .route-comp-table td:nth-child(2) {
-      color: #ff6b35; text-align: center; width: 32%;
-      border-right: 1px solid rgba(255,107,53,0.1);
-    }
-    .route-comp-table td:nth-child(3) {
-      color: #44ff88; text-align: center; font-weight: 700;
-    }
-    .route-comp-table tr:last-child td {
-      border-bottom: none;
-    }
-    .route-comp-label {
-      background: rgba(255,107,53,0.08);
-    }
-    .route-comp-label.safest {
-      background: rgba(68,255,136,0.08);
-    }
-    .route-comp-header {
-      background: rgba(255,107,53,0.12); font-weight: 700;
-    }
+/* checkbox toggle row */
+.ctoggle {
+  display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px;
+  background:rgba(255,107,53,.07); border:1px solid rgba(255,107,53,.13);
+  cursor:pointer; margin-bottom:12px; transition:all .2s;
+}
+.ctoggle:hover { background:rgba(255,107,53,.12); }
+.cb {
+  width:16px; height:16px; border-radius:4px; flex-shrink:0;
+  background:#ff6b35; border:1px solid #ff6b35;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:900; color:#0a0e14;
+}
+.cb.off { background:rgba(255,107,53,.1); border-color:rgba(255,107,53,.3); color:transparent; }
+.cb-lbl { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:#6b7280; }
 
-    .risk-report-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 320px;
-      display: none;
-      max-height: 500px; overflow-y: auto;
-    }
-    .risk-report-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .risk-report-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 12px; letter-spacing: 0.5px;
-    }
-    .risk-metric {
-      margin-bottom: 14px; padding-bottom: 10px;
-      border-bottom: 1px solid rgba(255,107,53,0.1);
-    }
-    .risk-metric:last-child { border-bottom: none; }
-    .risk-metric-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-      color: #8b949e; margin-bottom: 4px;
-    }
-    .risk-metric-value {
-      font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700;
-      color: #e6edf3;
-    }
-    .risk-metric-bar {
-      width: 100%; height: 8px; border-radius: 4px;
-      background: rgba(255,107,53,0.1); margin-top: 6px; overflow: hidden;
-    }
-    .risk-metric-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(to right, #44ff88, #ffff00, #ff8800, #ff0000);
-      transition: width 0.3s ease;
-    }
-    .risk-alert {
-      margin-top: 12px; padding: 10px; border-radius: 6px;
-      background: rgba(255,0,0,0.15); border: 1px solid rgba(255,0,0,0.3);
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ff6b35;
-    }
-    .risk-alert.warning { background: rgba(255,165,0,0.15); border-color: rgba(255,165,0,0.3); }
-    .risk-alert.info { background: rgba(100,200,255,0.15); border-color: rgba(100,200,255,0.3); color: #64c8ff; }
-    .risk-zones-container {
-      margin-top: 12px;
-    }
-    .risk-zone-item {
-      padding: 8px; margin-bottom: 6px; border-radius: 6px;
-      background: rgba(255,107,53,0.08); border-left: 3px solid rgba(255,107,53,0.3);
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
-    }
-    .risk-zone-item.critical { border-left-color: #ff0000; background: rgba(255,0,0,0.1); }
-    .risk-zone-item.high { border-left-color: #ff8800; background: rgba(255,165,0,0.1); }
-    .risk-zone-item.medium { border-left-color: #ffff00; background: rgba(255,255,0,0.1); }
+/* sliders */
+.ctrl-row { margin-bottom:12px; }
+.ctrl-lbl {
+  font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
+  color:#6b7280; display:flex; justify-content:space-between; margin-bottom:5px;
+}
+.ctrl-lbl span { color:#ff6b35; }
+input[type=range] {
+  width:100%; height:5px; border-radius:3px;
+  background:rgba(255,107,53,.15); appearance:none; -webkit-appearance:none; outline:none; cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance:none; width:13px; height:13px; border-radius:50%;
+  background:#ff6b35; cursor:pointer; box-shadow:0 0 8px rgba(255,107,53,.5);
+}
+input[type=range]::-moz-range-thumb {
+  width:13px; height:13px; border-radius:50%;
+  background:#ff6b35; border:none; cursor:pointer;
+}
 
-    .spread-model-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 16px 20px; min-width: 340px;
-      display: none;
-      max-height: 520px; overflow-y: auto;
-    }
-    .spread-model-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .spread-model-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #ff6b35; margin-bottom: 14px; letter-spacing: 0.5px;
-    }
-    .spread-param-group {
-      margin-bottom: 14px; padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255,107,53,0.1);
-    }
-    .spread-param-group:last-child { border-bottom: none; }
-    .spread-param-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-      color: #8b949e; display: flex; justify-content: space-between; margin-bottom: 6px;
-    }
-    .spread-param-value {
-      color: #ff6b35; font-weight: 700;
-    }
-    .spread-param-slider {
-      width: 100%; height: 6px; border-radius: 3px;
-      background: rgba(255,107,53,0.15); appearance: none;
-      -webkit-appearance: none; outline: none; cursor: pointer;
-    }
-    .spread-param-slider::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #ff6b35; cursor: pointer;
-      box-shadow: 0 0 10px rgba(255,107,53,0.4);
-      transition: all 0.2s ease;
-    }
-    .spread-param-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.15);
-      box-shadow: 0 0 16px rgba(255,107,53,0.6);
-    }
-    .spread-param-slider::-moz-range-thumb {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #ff6b35; cursor: pointer; border: none;
-      box-shadow: 0 0 10px rgba(255,107,53,0.4);
-    }
-    .spread-calc-section {
-      margin-top: 14px; padding: 12px; border-radius: 8px;
-      background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.15);
-    }
-    .spread-calc-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
-      color: #8b949e; margin-bottom: 8px; letter-spacing: 0.5px;
-    }
-    .spread-score-display {
-      font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 900;
-      color: #ff6b35; margin-bottom: 6px;
-    }
-    .spread-score-bar {
-      width: 100%; height: 12px; border-radius: 6px;
-      background: rgba(255,107,53,0.1); margin-bottom: 8px; overflow: hidden;
-    }
-    .spread-score-fill {
-      height: 100%; border-radius: 6px;
-      background: linear-gradient(to right, #00ff00, #ffff00, #ff8800, #ff0000);
-      transition: width 0.3s ease;
-    }
-    .spread-interpretation {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
-      line-height: 1.5;
-    }
-    .spread-interpretation-value {
-      color: #e6edf3; font-weight: 700;
-    }
+/* slope legend grid */
+.slope-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:8px; }
+.slope-cell { padding:7px 8px; background:rgba(255,107,53,.07); border-radius:6px; }
+.slope-cell-lbl { font-family:'JetBrains Mono',monospace; font-size:9px; color:#6b7280; margin-bottom:3px; }
+.slope-bar { height:4px; border-radius:2px; margin-bottom:3px; }
+.slope-cell-sub { font-family:'JetBrains Mono',monospace; font-size:8px; color:#4b5563; }
 
-    .satellite-panel {
-      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.88); backdrop-filter: blur(12px);
-      border: 1px solid rgba(100,150,255,0.3); border-radius: 12px;
-      padding: 16px 20px; min-width: 280px;
-      display: none;
-    }
-    .satellite-panel.active { display: block; animation: fadeSlideIn 0.3s ease; }
-    .satellite-title {
-      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
-      color: #64a4ff; margin-bottom: 12px; letter-spacing: 0.5px;
-    }
-    .satellite-btn {
-      width: 100%; padding: 12px 14px; border-radius: 8px;
-      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
-      background: rgba(100,150,255,0.15); border: 1.5px solid rgba(100,150,255,0.4);
-      color: #64a4ff; cursor: pointer; transition: all 0.25s ease;
-      letter-spacing: 0.5px; margin-bottom: 12px;
-    }
-    .satellite-btn:hover {
-      background: rgba(100,150,255,0.25); border-color: rgba(100,150,255,0.6);
-      transform: translateY(-1px); box-shadow: 0 0 16px rgba(100,150,255,0.2);
-    }
-    .satellite-btn.active {
-      background: rgba(68,255,136,0.18); border-color: #44ff88;
-      color: #44ff88; box-shadow: 0 0 20px rgba(68,255,136,0.15);
-    }
-    .satellite-status {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e;
-      line-height: 1.6; padding: 10px; background: rgba(100,150,255,0.08);
-      border-radius: 6px; border-left: 3px solid #64a4ff;
-    }
-    .satellite-status-line {
-      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
-    }
-    .satellite-status-line:last-child { margin-bottom: 0; }
-    .satellite-status-dot {
-      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-      background: #64a4ff; opacity: 0.7;
-    }
-    .satellite-status-dot.active {
-      background: #44ff88; opacity: 1;
-      animation: pulse-dot 1.5s ease-in-out infinite;
-    }
-    .satellite-demo-note {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(100,150,255,0.1);
-      font-style: italic;
-    }
+/* spread info */
+.spread-info { font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b7280; padding-top:10px; border-top:1px solid rgba(255,107,53,.1); margin-top:4px; }
+.spread-info span { color:#ff6b35; font-weight:700; }
 
-    .panel-hint {
-      position: fixed; top: 20px; left: 20px; z-index: 500;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px;
-      color: #8b949e; background: rgba(13,17,23,0.8);
-      padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,107,53,0.2);
-      display: none; opacity: 0; transition: opacity 0.3s ease;
-      pointer-events: none;
-    }
-    .panel-hint.visible {
-      display: block; opacity: 0.9;
-    }
+/* stage legend */
+.stage-leg { margin-top:10px; padding:9px 10px; background:rgba(255,107,53,.06); border-radius:6px; border-left:3px solid #ff6b35; }
+.srow { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:9px; color:#6b7280; margin-bottom:5px; }
+.srow:last-child { margin:0; }
+.sdot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 
-    .fullscreen-btn {
-      position: fixed; bottom: 20px; right: 20px; z-index: 999;
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-      padding: 8px 14px; border-radius: 8px;
-      background: rgba(68,255,136,0.12); border: 1px solid rgba(68,255,136,0.3);
-      color: #44ff88; cursor: pointer; transition: all 0.25s ease;
-      letter-spacing: 0.5px;
-    }
-    .fullscreen-btn:hover {
-      background: rgba(68,255,136,0.2); border-color: rgba(68,255,136,0.5);
-      transform: translateY(-1px); box-shadow: 0 0 12px rgba(68,255,136,0.2);
-    }
-    .fullscreen-btn.active {
-      background: rgba(100,150,255,0.15); border-color: rgba(100,150,255,0.4);
-      color: #64a4ff;
-    }
-    .spread-time-critical {
-      margin-top: 12px; padding: 10px; border-radius: 6px;
-      background: rgba(255,0,0,0.15); border: 1px solid rgba(255,0,0,0.3);
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ff6b35;
-      text-align: center; font-weight: 700;
-    }
-    .spread-time-critical.warning {
-      background: rgba(255,165,0,0.15); border-color: rgba(255,165,0,0.3);
-      color: #ffa500;
-    }
-    .spread-time-critical.info {
-      background: rgba(100,200,255,0.15); border-color: rgba(100,200,255,0.3);
-      color: #64c8ff;
-    }
-    .spread-details-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;
-    }
-    .spread-detail-item {
-      padding: 8px; border-radius: 6px; background: rgba(255,107,53,0.05);
-      border: 1px solid rgba(255,107,53,0.1);
-    }
-    .spread-detail-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #8b949e;
-      margin-bottom: 3px;
-    }
-    .spread-detail-value {
-      font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700;
-      color: #ff6b35;
-    }
+/* evacuation */
+.evac-item {
+  display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px;
+  background:rgba(255,107,53,.07); border:1px solid rgba(255,107,53,.13);
+  margin-bottom:7px; transition:all .2s;
+}
+.evac-item:hover { background:rgba(255,107,53,.12); transform:translateX(3px); }
+.evac-rank { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:#ff6b35; min-width:18px; text-align:center; }
+.evac-name { font-family:'Outfit',sans-serif; font-size:12px; font-weight:700; color:#e6edf3; }
+.evac-score { font-family:'JetBrains Mono',monospace; font-size:9px; color:#6b7280; margin-top:2px; }
 
-    .stats-container {
-      position: absolute; top: 20px; left: 320px; right: 20px; z-index: 1000;
-      display: flex; gap: 12px; height: 80px;
-      animation: fadeSlideIn 0.5s ease 0.15s both;
-    }
-    .stat-card {
-      flex: 1; background: rgba(13,17,23,0.85); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.3); border-radius: 10px;
-      padding: 14px 16px; display: flex; flex-direction: column;
-      justify-content: space-between; transition: all 0.3s ease;
-      overflow: hidden; position: relative;
-    }
-    .stat-card:hover {
-      border-color: rgba(255,107,53,0.5); box-shadow: 0 0 20px rgba(255,107,53,0.1);
-      transform: translateY(-2px);
-    }
-    .stat-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(to right, transparent, #ff6b35, transparent);
-      opacity: 0;
-      animation: topLine 2s ease-in-out infinite;
-    }
-    @keyframes topLine {
-      0%, 100% { opacity: 0; }
-      50% { opacity: 1; }
-    }
-    .stat-label {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
-      color: #8b949e; letter-spacing: 0.5px; text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .stat-value {
-      font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 900;
-      color: #e6edf3; line-height: 1;
-    }
-    .stat-unit {
-      font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #8b949e;
-      margin-top: 2px;
-    }
-    .stat-card.alert .stat-value {
-      color: #ff6b35;
-      animation: pulse-text 1s ease-in-out infinite;
-    }
-    @keyframes pulse-text {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
+/* badges */
+.badge { font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; padding:2px 7px; border-radius:4px; white-space:nowrap; }
+.badge.critical { background:rgba(255,0,0,.15); color:#ff6b35; border:1px solid rgba(255,107,53,.3); }
+.badge.high     { background:rgba(255,140,0,.15); color:#ffa040; border:1px solid rgba(255,140,0,.3); }
+.badge.medium   { background:rgba(255,255,0,.1);  color:#ffe040; border:1px solid rgba(255,255,0,.25); }
+.badge.low      { background:rgba(68,255,136,.1); color:#44ff88; border:1px solid rgba(68,255,136,.25); }
 
-    .live-indicator {
-      display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-    }
-    .live-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #44ff88; box-shadow: 0 0 8px rgba(68,255,136,0.6);
-      animation: pulse-dot 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-dot {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.2); opacity: 0.7; }
-    }
-    .live-text {
-      font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
-      color: #44ff88; letter-spacing: 1px;
-    }
+/* time panel */
+.time-lbl { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#ff6b35; margin-bottom:8px; }
+.time-info { display:flex; justify-content:space-between; margin-top:9px; font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b7280; }
+.time-info span:first-child { color:#ff6b35; font-weight:700; }
 
-    .update-timestamp {
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,107,53,0.1);
-    }
-    .update-timestamp-value {
-      color: #44ff88; font-weight: 700;
-    }
+/* risk analysis */
+.risk-bar-wrap { height:6px; background:rgba(255,107,53,.1); border-radius:3px; overflow:hidden; margin-top:5px; }
+.risk-bar-fill { height:100%; background:linear-gradient(90deg,#44ff88,#ffff00,#ff8800,#ff0000); border-radius:3px; transition:width .4s; }
+.risk-zone-row {
+  display:grid; grid-template-columns:1fr 44px 56px; align-items:center; gap:8px;
+  padding:9px 10px; margin-bottom:6px;
+  background:rgba(255,107,53,.07); border:1px solid rgba(255,107,53,.12); border-radius:7px;
+  transition:all .2s;
+}
+.risk-zone-row:hover { background:rgba(255,107,53,.12); }
+.zone-name { font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; color:#e6edf3; }
+.zone-pct  { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#ff6b35; text-align:right; }
 
-    .event-log-panel {
-      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
-      background: rgba(13,17,23,0.90); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,107,53,0.2); border-radius: 12px;
-      padding: 0; width: 320px; height: 220px;
-      display: flex; flex-direction: column;
-      animation: fadeSlideIn 0.5s ease 0.25s both;
-    }
-    .event-log-header {
-      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
-      color: #ff6b35; padding: 12px 14px; border-bottom: 1px solid rgba(255,107,53,0.15);
-      letter-spacing: 0.5px; flex-shrink: 0;
-    }
-    .event-log-content {
-      flex: 1; overflow-y: auto; padding: 8px 0;
-      scrollbar-width: thin; scrollbar-color: rgba(255,107,53,0.3) rgba(255,107,53,0.1);
-    }
-    .event-log-content::-webkit-scrollbar {
-      width: 6px;
-    }
-    .event-log-content::-webkit-scrollbar-track {
-      background: rgba(255,107,53,0.1);
-    }
-    .event-log-content::-webkit-scrollbar-thumb {
-      background: rgba(255,107,53,0.3); border-radius: 3px;
-    }
-    .event-log-content::-webkit-scrollbar-thumb:hover {
-      background: rgba(255,107,53,0.5);
-    }
-    .event-log-item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 10px; margin: 0 6px;
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e;
-      border-radius: 6px; transition: all 0.2s ease;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .event-log-item.highlight {
-      background: rgba(255,255,0,0.15); color: #e6edf3;
-      animation: highlightPulse 1s ease;
-    }
-    @keyframes highlightPulse {
-      0%, 100% { background: rgba(255,255,0,0.15); }
-      50% { background: rgba(255,255,0,0.25); }
-    }
-    .event-log-dot {
-      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-      box-shadow: 0 0 4px currentColor; opacity: 0.8;
-    }
-    .event-log-dot.critical {
-      background: #ff0000; color: #ff0000;
-    }
-    .event-log-dot.warning {
-      background: #ffff00; color: #ffff00;
-    }
-    .event-log-dot.info {
-      background: #44ff88; color: #44ff88;
-    }
-    .event-log-text {
-      flex: 1; overflow: hidden; text-overflow: ellipsis;
-    }
-  </style>
-  <style>body { box-sizing: border-box; }</style>
-  <script src="https://cdn.tailwindcss.com/3.4.17" type="text/javascript"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js" type="text/javascript"></script>
-  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
- </head>
- <body>
-  <div id="map"></div>
-  <div class="stats-container" id="statsContainer">
-   <div class="stat-card">
-    <div class="stat-label">
-     Analiz Edilen Alan
+/* regional */
+.reg-item {
+  padding:10px; background:rgba(255,107,53,.07); border-radius:7px;
+  border-left:3px solid rgba(255,107,53,.3); margin-bottom:8px; transition:all .2s;
+}
+.reg-item:hover { background:rgba(255,107,53,.12); }
+.reg-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.reg-title { font-family:'Outfit',sans-serif; font-size:11px; font-weight:600; color:#e6edf3; flex:1; }
+.reg-pct   { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#ff6b35; }
+.reg-bar   { height:3px; background:rgba(255,107,53,.15); border-radius:2px; overflow:hidden; margin-bottom:5px; }
+.reg-bar-fill { height:100%; border-radius:2px; transition:width .4s; }
+.reg-status { font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; }
+
+/* route comparison table */
+.route-table { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:10px; }
+.route-table th { color:#6b7280; font-weight:700; padding:6px 8px; border-bottom:1px solid rgba(255,107,53,.12); text-align:center; }
+.route-table th:first-child { text-align:left; }
+.route-table td { padding:7px 8px; border-bottom:1px solid rgba(255,107,53,.07); color:#e6edf3; text-align:center; }
+.route-table td:first-child { color:#6b7280; text-align:left; }
+.route-table tr:last-child td { border:none; }
+.route-table .col-short { color:#ff6b35; }
+.route-table .col-safe  { color:#44ff88; font-weight:700; }
+
+/* yayilma model */
+.model-score { font-family:'Outfit',sans-serif; font-size:30px; font-weight:900; color:#ff6b35; }
+.model-bar   { height:10px; background:rgba(255,107,53,.1); border-radius:5px; overflow:hidden; margin:8px 0; }
+.model-fill  { height:100%; background:linear-gradient(90deg,#00ff00,#ffff00,#ff8800,#ff0000); border-radius:5px; transition:width .4s; }
+.model-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; }
+.mdl-cell { padding:8px; background:rgba(255,107,53,.06); border-radius:6px; border:1px solid rgba(255,107,53,.1); }
+.mdl-cell-lbl { font-family:'JetBrains Mono',monospace; font-size:9px; color:#6b7280; margin-bottom:3px; }
+.mdl-cell-val { font-family:'Outfit',sans-serif; font-size:13px; font-weight:700; color:#ff6b35; }
+.alert-box { padding:9px 10px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; margin-top:10px; }
+.alert-box.red    { background:rgba(255,0,0,.12); border:1px solid rgba(255,50,50,.25); color:#ff6b35; }
+.alert-box.orange { background:rgba(255,140,0,.12); border:1px solid rgba(255,140,0,.25); color:#ffa040; }
+.alert-box.blue   { background:rgba(100,180,255,.1); border:1px solid rgba(100,180,255,.2); color:#64b4ff; }
+
+/* ═══════════════════════════════════════════════════
+   GÖKTÜRK / İMECE SATELLITE PANEL
+═══════════════════════════════════════════════════ */
+.goktürk-panel {
+  padding:14px 14px 12px;
+  background:rgba(8,16,28,.95);
+  border:1px solid rgba(68,200,255,.28);
+  border-radius:12px;
+  position:relative;
+  overflow:hidden;
+  flex-shrink:0;
+}
+.goktürk-panel::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,#44c8ff,#00ffcc,transparent);
+  animation:scanline 2.4s ease-in-out infinite;
+}
+@keyframes scanline { 0%,100%{opacity:0} 50%{opacity:1} }
+
+.goktürk-title-row {
+  display:flex; align-items:center; gap:7px; margin-bottom:11px;
+}
+.goktürk-title-icon { font-size:15px; }
+.goktürk-title-text {
+  font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+  color:#44c8ff; letter-spacing:.4px;
+}
+
+/* Big connect button */
+.sat-connect-btn {
+  width:100%; padding:11px 14px; border-radius:9px;
+  border:2px solid rgba(68,200,255,.35);
+  background:rgba(68,200,255,.09);
+  color:#44c8ff;
+  font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+  cursor:pointer; transition:all .25s; letter-spacing:.4px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  margin-bottom:11px;
+}
+.sat-connect-btn:hover:not(:disabled) {
+  background:rgba(68,200,255,.18); border-color:#44c8ff;
+  box-shadow:0 0 20px rgba(68,200,255,.25); transform:translateY(-1px);
+}
+.sat-connect-btn:disabled { opacity:.5; cursor:default; transform:none; }
+.sat-connect-btn.active {
+  background:rgba(68,255,136,.1); border-color:rgba(68,255,136,.5); color:#44ff88;
+  box-shadow:0 0 16px rgba(68,255,136,.15);
+}
+.sat-connect-btn .scb-check {
+  width:17px; height:17px; border-radius:4px; flex-shrink:0;
+  background:rgba(68,200,255,.15); border:1.5px solid rgba(68,200,255,.4);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:900; color:#44c8ff; transition:all .3s;
+}
+.sat-connect-btn.active .scb-check {
+  background:rgba(68,255,136,.2); border-color:#44ff88; color:#44ff88;
+}
+
+/* Status lines */
+.sat-status-lines {
+  display:flex; flex-direction:column; gap:6px; margin-bottom:11px;
+  overflow:hidden; max-height:0; transition:max-height .5s ease;
+}
+.sat-status-lines.visible { max-height:200px; }
+.sat-sl {
+  display:flex; align-items:center; gap:7px;
+  font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b7280;
+  opacity:0; transform:translateX(-6px); transition:opacity .4s, transform .4s;
+}
+.sat-sl.show { opacity:1; transform:translateX(0); }
+.sat-sl-dot {
+  width:7px; height:7px; border-radius:50%; flex-shrink:0;
+  background:#374151;
+}
+.sat-sl-dot.green { background:#44ff88; box-shadow:0 0 6px #44ff88; }
+.sat-sl-dot.pulse { background:#44ff88; box-shadow:0 0 6px #44ff88; animation:blink 1.4s ease-in-out infinite; }
+
+/* Adapted banner */
+.sat-adapted-banner {
+  width:100%; padding:9px 12px; border-radius:8px;
+  border:1.5px solid rgba(68,200,255,.3);
+  background:rgba(68,200,255,.07);
+  font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+  color:#44c8ff; letter-spacing:.3px;
+  display:flex; align-items:center; gap:8px;
+  overflow:hidden; max-height:0; opacity:0;
+  transition:max-height .4s ease, opacity .4s ease, margin .4s;
+}
+.sat-adapted-banner.visible { max-height:60px; opacity:1; margin-bottom:8px; }
+.sat-adapted-banner .ab-check {
+  width:16px; height:16px; border-radius:4px; flex-shrink:0;
+  background:rgba(68,200,255,.2); border:1.5px solid rgba(68,200,255,.5);
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; color:#44c8ff; font-weight:900;
+}
+
+/* Demo note */
+.sat-demo-note {
+  font-family:'JetBrains Mono',monospace; font-size:9px; color:#374151;
+  text-align:center; margin-top:6px;
+  opacity:0; transition:opacity .5s;
+}
+.sat-demo-note.visible { opacity:1; }
+
+/* ═══════════════════════════════════════════════════
+   YANGIN RİSKİ YÜKSEK BÖLGELER KARTI
+═══════════════════════════════════════════════════ */
+.fire-risk-box{}
+.fire-risk-header {
+  display:flex; align-items:center; gap:7px;
+  font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+  color:#ff8800; letter-spacing:.5px;
+  padding:10px 12px; border-bottom:1px solid rgba(255,107,53,.12);
+}
+.fire-risk-header .fh-icon { font-size:13px; }
+
+.frz-item {
+  padding:10px 12px 9px; border-bottom:1px solid rgba(255,107,53,.08);
+  transition:background .2s;
+}
+.frz-item:last-child { border-bottom:none; }
+.frz-item:hover { background:rgba(255,107,53,.06); }
+
+.frz-top {
+  display:flex; align-items:center; gap:7px; margin-bottom:7px;
+}
+.frz-icon { font-size:13px; flex-shrink:0; }
+.frz-name {
+  font-family:'Outfit',sans-serif; font-size:12px; font-weight:700;
+  color:#e6edf3; flex:1;
+}
+.frz-pct {
+  font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700;
+}
+
+.frz-meta {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px 8px;
+}
+.frz-meta-cell {
+  display:flex; align-items:center; gap:4px;
+  font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b7280;
+}
+.frz-meta-icon { font-size:11px; }
+
+/* ═══════════════════════════════════════════════════
+   RIGHT PANEL  (col 3, rows 2-3)
+═══════════════════════════════════════════════════ */
+#right-panel {
+  grid-column:3; grid-row:2/4;
+  display:flex; flex-direction:column; gap:10px;
+  padding:0 12px 10px 0;
+  overflow-y:auto; scrollbar-width:none;
+}
+#right-panel::-webkit-scrollbar { display:none; }
+
+/* event log */
+.ev-box { display:flex; flex-direction:column; min-height:200px; }
+.ev-header { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#ff6b35; padding:10px 12px; border-bottom:1px solid rgba(255,107,53,.12); flex-shrink:0; }
+.ev-scroll { flex:1; overflow-y:auto; padding:6px 0; scrollbar-width:thin; scrollbar-color:rgba(255,107,53,.25) transparent; max-height:210px; }
+.ev-scroll::-webkit-scrollbar { width:4px; }
+.ev-scroll::-webkit-scrollbar-thumb { background:rgba(255,107,53,.3); border-radius:2px; }
+.ev-item { display:flex; align-items:flex-start; gap:7px; padding:5px 10px; font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b7280; }
+.ev-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; margin-top:2px; }
+.ev-dot.crit { background:#ff3333; box-shadow:0 0 5px #ff3333; }
+.ev-dot.warn { background:#ffff00; box-shadow:0 0 5px #ffff00; }
+.ev-dot.info { background:#44ff88; box-shadow:0 0 5px #44ff88; }
+
+/* ═══════════════════════════════════════════════════
+   BOTTOM BAR  (row 3, full width)
+═══════════════════════════════════════════════════ */
+#bottombar {
+  grid-column:1/-1; grid-row:3;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 14px 10px; pointer-events:none;
+}
+#coords {
+  font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b7280;
+  background:rgba(10,14,20,.8); backdrop-filter:blur(8px);
+  border:1px solid rgba(255,107,53,.12); border-radius:7px;
+  padding:5px 12px; pointer-events:all;
+}
+#coords span { color:#ff6b35; }
+#attrib { font-family:'JetBrains Mono',monospace; font-size:9px; color:#374151; pointer-events:all; }
+
+/* ═══════════════════════════════════════════════════
+   POPUP OVERRIDES
+═══════════════════════════════════════════════════ */
+.leaflet-popup-content-wrapper {
+  background:rgba(255,255,255,.97) !important;
+  border-radius:10px !important;
+  box-shadow:0 8px 32px rgba(0,0,0,.5) !important;
+  padding:0 !important;
+  border:1px solid rgba(255,107,53,.3) !important;
+}
+.leaflet-popup-content { margin:0 !important; font-family:'JetBrains Mono',monospace !important; font-size:12px !important; color:#111 !important; }
+.leaflet-popup-tip { background:rgba(255,255,255,.97) !important; }
+.leaflet-popup-close-button { color:#666 !important; font-size:16px !important; top:6px !important; right:8px !important; }
+.pop-inner { padding:12px 14px; min-width:165px; }
+.pop-title { font-weight:700; color:#ff6b35; font-size:13px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(255,107,53,.2); }
+.pop-row { display:flex; justify-content:space-between; gap:12px; margin-bottom:4px; font-size:11px; }
+.pop-key { color:#888; }
+.pop-val { color:#222; font-weight:700; }
+
+/* helpers */
+.hidden { display:none !important; }
+.sep { height:1px; background:rgba(255,107,53,.08); margin:4px 0; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="ui">
+
+  <!-- ══════ TOP BAR ══════ -->
+  <div id="topbar">
+
+    <div class="glass pad" id="logo-panel">
+      <div class="live-badge"><div class="live-dot"></div>CANLI ANALİZ</div>
+      <div class="logo-title">EERIS+</div>
+      <div class="logo-sub">Afet Karar Destek Sistemi</div>
+      <div class="logo-bar"></div>
+      <div class="logo-ts">Son Güncellenme: <span id="ts">--:--:--</span></div>
+      <div class="logo-ts" style="margin-top:3px;" id="team-status">Ekip Durumu: Hazır</div>
     </div>
-    <div class="stat-value">
-     2.847
+
+    <div class="glass stat-card">
+      <div class="stat-label">ANALİZ EDİLEN ALAN</div>
+      <div class="stat-value">2.847</div>
+      <div class="stat-unit">km²</div>
     </div>
-    <div class="stat-unit">
-     km²
+
+    <div class="glass stat-card danger">
+      <div class="stat-label">TEHLİKE ALTINDAKİ NÜFUS</div>
+      <div class="stat-value" id="sv-pop">—</div>
+      <div class="stat-unit">kişi</div>
     </div>
-   </div>
-   <div class="stat-card" id="populationCard">
-    <div class="stat-label">
-     Tehlike Altındaki Nüfus
+
+    <div class="glass stat-card danger">
+      <div class="stat-label">AKTİF UYARI</div>
+      <div class="stat-value" id="sv-alert">—</div>
+      <div class="stat-unit">POI</div>
     </div>
-    <div class="stat-value" id="populationValue">
-     0
+
+    <div class="glass stat-card">
+      <div class="stat-label">EN YÜKSEK RİSK</div>
+      <div class="stat-value" id="sv-risk">—</div>
+      <div class="stat-unit">risk skoru</div>
     </div>
-    <div class="stat-unit">
-     kişi
+
+    <div id="toggles">
+      <button class="tbtn on"  data-l="risk">Risk</button>
+      <button class="tbtn on"  data-l="spread">Yayılım</button>
+      <button class="tbtn on"  data-l="poi">POI</button>
+      <button class="tbtn"     data-l="route">Rota</button>
+      <button class="tbtn"     data-l="model">Yayılma</button>
+      <button class="tbtn"     data-l="report">Rapor</button>
     </div>
-   </div>
-   <div class="stat-card" id="alertCard">
-    <div class="stat-label">
-     Aktif Uyarı
-    </div>
-    <div class="stat-value" id="activeAlertValue">
-     0
-    </div>
-    <div class="stat-unit">
-     POI
-    </div>
-   </div>
-   <div class="stat-card">
-    <div class="stat-label">
-     En Yüksek Risk
-    </div>
-    <div class="stat-value" id="maxRiskValue">
-     0.00
-    </div>
-    <div class="stat-unit">
-     risk skoru
-    </div>
-   </div>
+
   </div>
-  <div class="panel-top-left">
-   <div class="live-indicator">
-    <div class="live-dot"></div>
-    <div class="live-text">
-     CANLI ANALİZ
-    </div>
-   </div>
-   <div class="panel-title" id="mainTitle">
-    EERIS+
-   </div>
-   <div class="panel-subtitle" id="subtitle">
-    Afet Karar Destek Sistemi
-   </div>
-   <div class="panel-accent-line"></div>
-   <div class="update-timestamp">
-    Son Güncellenme: <span class="update-timestamp-value" id="updateTimestamp">00:00:00</span>
-   </div>
-   <div class="update-timestamp" id="teamStatus" style="margin-top: 8px; color: #8b949e;">
-    Ekip Durumu: Hazır
-   </div>
-  </div>
-  <div class="time-slider-panel" id="timeSliderPanel">
-   <div class="time-label">
-    Saat: <span id="timeDisplay">14:00</span>
-   </div><input type="range" id="timeSlider" class="time-slider" min="6" max="23" value="14">
-   <div class="time-info"><span id="highRiskCount">Yüksek Riskli: 0</span>
-   </div>
-  </div>
-  <div class="toggle-panel">
-   <button class="toggle-btn" data-layer="risk">Risk</button> <button class="toggle-btn" data-layer="spread">Yayılım</button> <button class="toggle-btn" data-layer="poi">POI</button> <button class="toggle-btn" data-layer="route">Rota</button> <button class="toggle-btn" data-layer="spreadModel">Yayılma</button> <button class="toggle-btn" data-layer="report">Rapor</button>
-  </div>
-  <div class="coord-panel" id="coords">
-   <span>LAT</span> 37.2000 &nbsp; <span>LNG</span> 28.3000
-  </div>
-  <div class="legend-panel" id="legendPanel">
-   <div class="legend-title">
-    Risk Seviyesi
-   </div>
-   <div class="legend-gradient"></div>
-   <div class="legend-labels"><span>Düşük</span> <span>Yüksek</span>
-   </div>
-  </div>
-  <div class="panel-hint" id="panelHint">
-   F — Panelleri Göster
-  </div>
-  <div class="fullscreen-btn" id="fullscreenBtn">
-   ⛶ Tam Ekran Demo
-  </div>
-  <div class="simulation-panel" id="simulationPanel">
-   <div class="sim-title">
-    Simülasyon Kontrolü
-   </div>
-   <div class="sim-toggle" id="spreadForecastToggle">
-    <div class="sim-toggle-checkbox checked"></div>
-    <div class="sim-toggle-label">
-     Yayılım Tahmini (3 Aşama)
-    </div>
-   </div>
-   <div class="sim-control">
-    <div class="sim-label">
-     Rüzgar Hızı <span class="sim-label-value" id="windSpeedDisplay">45 km/h</span>
-    </div><input type="range" id="windSpeedSlider" class="sim-slider" min="0" max="80" value="45">
-   </div>
-   <div class="sim-control">
-    <div class="sim-label">
-     Rüzgar Yönü <span class="sim-label-value" id="windDirectionDisplay">45°</span>
-    </div><input type="range" id="windDirectionSlider" class="sim-slider" min="0" max="360" value="45">
-    <div class="wind-compass">
-     <div class="wind-arrow" id="windArrow">
-      ⬈
-     </div>
-    </div>
-   </div>
-   <div class="sim-info">
-    Yayılım Alanı: <span class="sim-info-value" id="spreadAreaDisplay">0.0 km²</span>
-   </div>
-   <div class="spread-stages-info">
-    <div class="spread-stage-item">
-     <div class="spread-stage-dot stage0"></div><span>T+0 (Mevcut)</span>
-    </div>
-    <div class="spread-stage-item">
-     <div class="spread-stage-dot stage1"></div><span>T+1 saat (%60 büyük)</span>
-    </div>
-    <div class="spread-stage-item">
-     <div class="spread-stage-dot stage2"></div><span>T+2 saat (%140 büyük)</span>
-    </div>
-   </div>
-  </div>
-  <div class="evacuation-panel" id="evacuationPanel">
-   <div class="evac-title" id="evacuationTitle">
-    Tahliye Öncelik Listesi
-   </div>
-   <div class="evac-list" id="evacuationList">
-   </div>
-  </div>
-  <div class="route-comparison-panel" id="routeComparisonPanel">
-   <div class="route-comp-title">
-    Rota Karşılaştırması
-   </div>
-   <table class="route-comp-table">
-    <tbody>
-     <tr class="route-comp-header">
-      <td></td>
-      <td>En Kısa</td>
-      <td>En Güvenli</td>
-     </tr>
-     <tr>
-      <td class="route-comp-label">Mesafe</td>
-      <td>34 km</td>
-      <td>47 km</td>
-     </tr>
-     <tr>
-      <td class="route-comp-label">Risk Skoru</td>
-      <td>0.87</td>
-      <td>0.19</td>
-     </tr>
-     <tr>
-      <td class="route-comp-label">Tahmini Süre</td>
-      <td>42 dk</td>
-      <td>58 dk</td>
-     </tr>
-     <tr>
-      <td class="route-comp-label safest">Yayılım Riski</td>
-      <td>Yüksek</td>
-      <td style="color: #44ff88;">Düşük</td>
-     </tr>
-    </tbody>
-   </table>
-  </div>
-  <div class="risk-report-panel" id="riskReportPanel">
-   <div class="risk-report-title" id="riskReportTitle">
-    Gerçek Zamanlı Risk Analizi
-   </div>
-   <div class="risk-metric">
-    <div class="risk-metric-label">
-     GENEL RİSK SEVİYESİ
-    </div>
-    <div class="risk-metric-value" id="riskLevelValue">
-     %65
-    </div>
-    <div class="risk-metric-bar">
-     <div class="risk-metric-fill" id="riskLevelBar" style="width: 65%;"></div>
-    </div>
-   </div>
-   <div class="risk-metric">
-    <div class="risk-metric-label">
-     YÜKSEK RİSK BÖLGESİ SAYISI
-    </div>
-    <div class="risk-metric-value" id="highRiskZoneCount">
-     0
-    </div>
-   </div>
-   <div class="risk-metric">
-    <div class="risk-metric-label">
-     UYARI DURUMU
-    </div>
-    <div class="risk-alert" id="riskAlertStatus">
-     Sistem Normal - Takip Et
-    </div>
-   </div>
-   <div class="risk-metric">
-    <div class="risk-metric-label">
-     RİSK BÖLGELERI
-    </div>
-    <div class="risk-zones-container" id="riskZonesContainer">
-     <div class="risk-zone-item critical">
-      🔴 Marmaris Bölgesi - %87 Risk
-     </div>
-     <div class="risk-zone-item high">
-      🟠 Bodrum Kıyısı - %72 Risk
-     </div>
-     <div class="risk-zone-item medium">
-      🟡 Orman Köyleri - %58 Risk
-     </div>
-    </div>
-   </div>
-   <div class="risk-metric">
-    <div class="risk-metric-label">
-     RÜZGâR ETKİSİ
-    </div>
-    <div class="risk-metric-value" id="windImpactValue" style="font-size: 12px; color: #8b949e;">
-     Kuzey 45°, 45 km/h
-    </div>
-   </div>
-   <div class="risk-alert info">
-    ℹ️ POI katmanını açarak insan yerleşim alanlarının risk durumunu görüntüleyin.
-   </div>
-  </div>
-  <div class="satellite-panel" id="satellitePanel">
-   <div class="satellite-title">
-    🛰️ GÖKTÜRK / İMECE
-   </div><button class="satellite-btn" id="satelliteBtn"> Yerli Uydu Verisini Bağla </button>
-   <div class="satellite-status" id="satelliteStatus">
-    <div class="satellite-status-line">
-     <div class="satellite-status-dot"></div><span>Bağlı değil</span>
-    </div>
-   </div>
-   <div class="satellite-demo-note">
-    Demo modunda simüle edilmektedir
-   </div>
-  </div>
-  <div class="event-log-panel" id="eventLogPanel">
-   <div class="event-log-header">
-    Sistem Olayları
-   </div>
-   <div class="event-log-content" id="eventLogContent">
-   </div>
-  </div>
-  <div class="spread-model-panel" id="spreadModelPanel">
-   <div class="spread-model-title" id="spreadModelTitle">
-    Yangın Yayılma Analizi
-   </div>
-   <div class="spread-param-group">
-    <div class="spread-param-label">
-     Rüzgar Hızı <span class="spread-param-value" id="spreadWindSpeedDisplay">30 km/h</span>
-    </div><input type="range" id="spreadWindSpeedSlider" class="spread-param-slider" min="10" max="80" value="30">
-   </div>
-   <div class="spread-param-group">
-    <div class="spread-param-label">
-     Nem Oranı <span class="spread-param-value" id="spreadHumidityDisplay">%35</span>
-    </div><input type="range" id="spreadHumiditySlider" class="spread-param-slider" min="5" max="90" value="35">
-   </div>
-   <div class="spread-param-group">
-    <div class="spread-param-label">
-     Orman Yoğunluğu <span class="spread-param-value" id="spreadDensityDisplay">%65</span>
-    </div><input type="range" id="spreadDensitySlider" class="spread-param-slider" min="20" max="95" value="65">
-   </div>
-   <div class="spread-param-group">
-    <div class="spread-param-label">
-     Sıcaklık Etkisi <span class="spread-param-value" id="spreadTemperatureDisplay">%45</span>
-    </div><input type="range" id="spreadTemperatureSlider" class="spread-param-slider" min="10" max="100" value="45">
-   </div>
-   <div class="spread-calc-section">
-    <div class="spread-calc-label">
-     🔥 YANGININ YAYILMA SKORU
-    </div>
-    <div class="spread-score-display" id="spreadScoreDisplay">
-     0.74
-    </div>
-    <div class="spread-score-bar">
-     <div class="spread-score-fill" id="spreadScoreFill" style="width: 74%;"></div>
-    </div>
-    <div class="spread-interpretation">
-     <strong>Yorumlama:</strong> Yangın <span class="spread-interpretation-value">ÇOK HIZLI</span> yayılıyor
-    </div>
-    <div class="spread-time-critical">
-     ⏱️ Müdahale Süresi: <span id="spreadTimeWindow">20 dakika</span>
-    </div>
-    <div class="spread-details-grid">
-     <div class="spread-detail-item">
-      <div class="spread-detail-label">
-       Saatlik Yayılma
+
+  <!-- ══════ LEFT SIDEBAR ══════ -->
+  <div id="sidebar">
+
+    <!-- GÖKTÜRK / İMECE Satellite Integration -->
+    <div class="goktürk-panel">
+      <div class="goktürk-title-row">
+        <span class="goktürk-title-icon">🛰️</span>
+        <span class="goktürk-title-text">GÖKTÜRK / İMECE Uydu Sistemi</span>
       </div>
-      <div class="spread-detail-value" id="spreadHourlyRate">
-       2.4 km²
+
+      <button class="sat-connect-btn" id="satConnectBtn" onclick="handleSatConnect()">
+        <div class="scb-check" id="satCheck">—</div>
+        <span id="satBtnTxt">Uydu Bağlantısı Kur</span>
+      </button>
+
+      <div class="sat-status-lines" id="satStatusLines">
+        <div class="sat-sl" id="ssl1"><div class="sat-sl-dot" id="dot1"></div><span>Bağlantı kuruldu – veri aktarımı başladı</span></div>
+        <div class="sat-sl" id="ssl2"><div class="sat-sl-dot" id="dot2"></div><span>GÖKTÜRK-2 – aktif 🛰️</span></div>
+        <div class="sat-sl" id="ssl3"><div class="sat-sl-dot" id="dot3"></div><span>İMECE SAR verisi – alınıyor</span></div>
+        <div class="sat-sl" id="ssl4"><div class="sat-sl-dot" id="dot4"></div><span>Termal tarama – çalışıyor</span></div>
       </div>
-     </div>
-     <div class="spread-detail-item">
-      <div class="spread-detail-label">
-       Alev Yüksekliği
+
+      <div class="sat-adapted-banner" id="satAdaptedBanner">
+        <div class="ab-check">✓</div>
+        <span>Göktürk Verilerine Uyarlanmıştır</span>
       </div>
-      <div class="spread-detail-value" id="spreadFlameHeight">
-       18 m
-      </div>
-     </div>
-     <div class="spread-detail-item">
-      <div class="spread-detail-label">
-       Kritik Bölge
-      </div>
-      <div class="spread-detail-value" id="spreadCriticalArea">
-       6.2 km²
-      </div>
-     </div>
-     <div class="spread-detail-item">
-      <div class="spread-detail-label">
-       Tahliye Zamanı
-      </div>
-      <div class="spread-detail-value" id="spreadEvacuationTime">
-       18 dk
-      </div>
-     </div>
+
+      <div class="sat-demo-note" id="satDemoNote">Demo modunda simüle edilmektedir</div>
     </div>
-   </div>
-   <div class="risk-alert info" style="margin-top: 12px;">
-    ℹ️ Yayılma Modeli: Rüzgar ve nem oranı ile yangının hızını tahmin eder. Düşük nem + yüksek rüzgar = hızlı yayılma
-   </div>
-  </div>
-  <script>
-    // POI (Points of Interest) data - Gerçek Muğla Bölgesi Konumları
-    const poiData = [
-      // === HASTANELER ===
-      { name: 'Muğla Eğitim Araştırma Hastanesi', type: 'Hastane', priority: 1.0, population: 5000, lat: 37.2153, lng: 28.3636 },
-      { name: 'Marmaris Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 3000, lat: 36.8555, lng: 28.2771 },
-      { name: 'Bodrum Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 2500, lat: 37.0344, lng: 27.4305 },
-      { name: 'Fethiye Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 2800, lat: 36.6556, lng: 29.1243 },
-      { name: 'Köyceğiz Devlet Hastanesi', type: 'Hastane', priority: 1.0, population: 1500, lat: 36.9728, lng: 28.6833 },
-      
-      // === İLÇE MERKEZLERİ (Okullar/İdari) ===
-      { name: 'Milas İlçe Merkezi', type: 'Okul', priority: 0.85, population: 1200, lat: 37.3167, lng: 27.7833 },
-      { name: 'Datça İlçe Merkezi', type: 'Okul', priority: 0.85, population: 800, lat: 36.7269, lng: 27.6908 },
-      { name: 'Ortaca İlçe Merkezi', type: 'Okul', priority: 0.85, population: 900, lat: 36.8333, lng: 28.7667 },
-      { name: 'Yatağan İlçe Merkezi', type: 'Okul', priority: 0.85, population: 1100, lat: 37.3333, lng: 28.1333 },
-      { name: 'Seydikemer Merkezi', type: 'Okul', priority: 0.85, population: 700, lat: 36.7500, lng: 29.0000 },
-      
-      // === ORMAN KÖYLERİ (2021 Yangın Bölgeleri) ===
-      { name: 'Turunç Köyü', type: 'Köy', priority: 0.70, population: 450, lat: 36.7700, lng: 28.2800 },
-      { name: 'Bayır Köyü', type: 'Köy', priority: 0.70, population: 380, lat: 36.9200, lng: 28.3500 },
-      { name: 'Hisarönü', type: 'Köy', priority: 0.70, population: 520, lat: 36.8100, lng: 28.1600 },
-      { name: 'Orhaniye Köyü', type: 'Köy', priority: 0.70, population: 420, lat: 36.9000, lng: 28.2200 },
-      { name: 'Selimiye Köyü', type: 'Köy', priority: 0.70, population: 360, lat: 36.8300, lng: 28.1900 },
-      { name: 'Çamlı Köyü', type: 'Köy', priority: 0.70, population: 410, lat: 36.8700, lng: 28.1700 },
-      { name: 'Çetibeli Köyü', type: 'Köy', priority: 0.70, population: 390, lat: 36.9300, lng: 28.2100 },
-      { name: 'Karaca Köyü', type: 'Köy', priority: 0.70, population: 440, lat: 36.9500, lng: 28.1500 },
-      { name: 'Karacasöğüt Köyü', type: 'Köy', priority: 0.70, population: 370, lat: 36.9500, lng: 28.1000 },
-      { name: 'Gökova Köyü', type: 'Köy', priority: 0.70, population: 480, lat: 37.0300, lng: 28.3500 },
-      { name: 'Kıran Köyü', type: 'Köy', priority: 0.70, population: 350, lat: 37.0500, lng: 28.3200 },
-      { name: 'Kuyucak Köyü', type: 'Köy', priority: 0.70, population: 400, lat: 37.0700, lng: 28.3000 },
-      { name: 'Sarnıç Köyü', type: 'Köy', priority: 0.70, population: 360, lat: 37.0200, lng: 28.4000 },
-      { name: 'Çiçekli Köyü', type: 'Köy', priority: 0.70, population: 430, lat: 37.1000, lng: 28.4500 },
-      { name: 'Armutçuk Köyü', type: 'Köy', priority: 0.70, population: 380, lat: 37.1200, lng: 28.4200 },
-      { name: 'Kıyra Köyü', type: 'Köy', priority: 0.70, population: 420, lat: 37.0800, lng: 28.4700 },
-      { name: 'Emecik Köyü', type: 'Köy', priority: 0.70, population: 340, lat: 36.7800, lng: 27.5800 },
-      { name: 'Kovanlık Köyü', type: 'Köy', priority: 0.70, population: 310, lat: 36.7500, lng: 27.6200 },
-      { name: 'Döğüşbelen Köyü', type: 'Köy', priority: 0.70, population: 390, lat: 37.0200, lng: 28.7000 },
-      { name: 'Hamitköy', type: 'Köy', priority: 0.70, population: 360, lat: 36.9500, lng: 28.7200 },
-      
-      // === AHIRLAR / ÇİFTLİKLER ===
-      { name: 'Kavaklıdere Çiftliği', type: 'Hayvancılık', priority: 0.55, population: 200, lat: 37.4333, lng: 28.3833 },
-      { name: 'Menteşe Ahırları', type: 'Hayvancılık', priority: 0.55, population: 180, lat: 37.1800, lng: 28.3000 },
-      { name: 'Çamarası Çiftliği', type: 'Hayvancılık', priority: 0.55, population: 160, lat: 37.0600, lng: 27.5500 },
-      { name: 'Sakar Ormanı Ahır', type: 'Hayvancılık', priority: 0.55, population: 140, lat: 37.0500, lng: 28.6000 },
-      { name: 'Yatağan Büyükbaş', type: 'Hayvancılık', priority: 0.55, population: 190, lat: 37.3500, lng: 28.1500 },
-      { name: 'Milas Küçükbaş', type: 'Hayvancılık', priority: 0.55, population: 170, lat: 37.2900, lng: 27.8200 }
-    ];
 
-    // Create POI icon
-    function createPoiIcon(type) {
-      let bgColor, symbol;
-      
-      switch(type) {
-        case 'Hastane':
-          bgColor = '#ff0000';
-          symbol = '+';
-          break;
-        case 'Okul':
-          bgColor = '#0066ff';
-          symbol = '🏢';
-          break;
-        case 'Köy':
-          bgColor = '#ffff00';
-          symbol = '🏘';
-          break;
-        case 'Hayvancılık':
-          bgColor = '#00ff00';
-          symbol = '•';
-          break;
-        default:
-          bgColor = '#888888';
-          symbol = '•';
-      }
+    <!-- Simulation Control -->
+    <div class="glass pad">
+      <div class="panel-title">Simülasyon Kontrolü</div>
 
-      const html = `<div style="
-        width: 24px; height: 24px; border-radius: 50%;
-        background: ${bgColor}; display: flex; align-items: center;
-        justify-content: center; color: ${type === 'Köy' ? '#000' : '#fff'};
-        font-size: 14px; font-weight: bold; border: 2px solid #fff;
-        box-shadow: 0 0 8px rgba(0,0,0,0.5);
-      ">${symbol}</div>`;
+      <div class="ctoggle" id="forecastToggle">
+        <div class="cb" id="forecastCB">✓</div>
+        <div class="cb-lbl">Yayılım Tahmini (3 Aşama)</div>
+      </div>
 
-      return L.divIcon({
-        html: html,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -12]
-      });
-    }
+      <div class="ctrl-row">
+        <div class="ctrl-lbl">Rüzgar Hızı <span id="wsDisp">45 km/h</span></div>
+        <input type="range" id="wsSlider" min="0" max="80" value="45">
+      </div>
 
-    // Calculate risk score based on nearby heatmap intensity
-    function calculateRiskScore(lat, lng) {
-      // Find closest risk point
-      let minDist = Infinity;
-      let closestIntensity = 0.5;
-      
-      riskPoints.forEach(point => {
-        const dist = Math.sqrt(Math.pow(point.lat - lat, 2) + Math.pow(point.lng - lng, 2));
-        if (dist < minDist) {
-          minDist = dist;
-          closestIntensity = point.baseIntensity;
-        }
-      });
-      
-      return Math.max(0.1, closestIntensity - (minDist * 0.2));
-    }
+      <div class="ctrl-row">
+        <div class="ctrl-lbl">Rüzgar Yönü <span id="wdDisp">45°</span></div>
+        <input type="range" id="wdSlider" min="0" max="360" value="45">
+        <div style="text-align:center;margin-top:8px;font-size:22px;transition:transform .25s;" id="wArrow">⬈</div>
+      </div>
 
-    // Generate evacuation list
-    function generateEvacuationList(hour) {
-      return poiData
-        .map(poi => {
-          const riskIntensity = getIntensityAtHour(calculateRiskScore(poi.lat, poi.lng), hour);
-          const evacuationScore = (riskIntensity * poi.priority).toFixed(3);
-          
-          return {
-            ...poi,
-            riskIntensity,
-            evacuationScore: parseFloat(evacuationScore)
-          };
-        })
-        .sort((a, b) => b.evacuationScore - a.evacuationScore)
-        .slice(0, 5);
-    }
+      <div class="ctrl-row">
+        <div class="ctrl-lbl">Orman Yoğunluğu <span id="fdDisp">%65</span></div>
+        <input type="range" id="fdSlider" min="0" max="100" value="65">
+      </div>
 
-    // Update evacuation list UI
-    function updateEvacuationList(hour) {
-      const list = generateEvacuationList(hour);
-      const listContainer = document.getElementById('evacuationList');
-      listContainer.innerHTML = '';
-      
-      list.forEach((poi, idx) => {
-        let badge = 'medium';
-        if (poi.evacuationScore >= 0.7) badge = 'critical';
-        else if (poi.evacuationScore >= 0.5) badge = 'high';
-        
-        const badgeText = badge === 'critical' ? 'KRİTİK' : (badge === 'high' ? 'YÜKSEK' : 'ORTA');
-        
-        const item = document.createElement('div');
-        item.className = 'evac-item';
-        item.innerHTML = `
-          <div class="evac-rank">${idx + 1}</div>
-          <div class="evac-content">
-            <div class="evac-name">${poi.name}</div>
-            <div class="evac-score">Score: ${poi.evacuationScore.toFixed(3)}</div>
+      <div class="ctrl-row" style="margin-bottom:0;">
+        <div class="ctrl-lbl" style="margin-bottom:0;">Eğim Analizi</div>
+        <div class="slope-grid">
+          <div class="slope-cell" style="border-left:3px solid #ffff00;">
+            <div class="slope-cell-lbl">Düşük</div>
+            <div class="slope-bar" style="background:rgba(255,255,0,.3);"></div>
+            <div class="slope-cell-sub">0-30%</div>
           </div>
-          <div class="evac-badge ${badge}">${badgeText}</div>
-        `;
-        listContainer.appendChild(item);
-      });
-    }
-
-    // Risk points data - 20 points around Muğla region
-    const riskPoints = [
-      { lat: 37.2, lng: 28.3, baseIntensity: 0.6 },      // Muğla center
-      { lat: 37.15, lng: 28.25, baseIntensity: 0.5 },    
-      { lat: 37.25, lng: 28.35, baseIntensity: 0.7 },    
-      { lat: 37.1, lng: 28.4, baseIntensity: 0.45 },     
-      { lat: 37.3, lng: 28.2, baseIntensity: 0.55 },     
-      { lat: 37.05, lng: 28.25, baseIntensity: 0.65 },   // Köyceğiz direction
-      { lat: 36.95, lng: 28.35, baseIntensity: 0.48 },   
-      { lat: 36.85, lng: 28.2, baseIntensity: 0.52 },    
-      { lat: 37.35, lng: 28.45, baseIntensity: 0.6 },    // Marmaris direction
-      { lat: 37.4, lng: 28.5, baseIntensity: 0.7 },      
-      { lat: 37.45, lng: 28.35, baseIntensity: 0.58 },   
-      { lat: 37.38, lng: 28.25, baseIntensity: 0.62 },   
-      { lat: 37.5, lng: 28.6, baseIntensity: 0.72 },     // Bodrum direction
-      { lat: 37.55, lng: 28.68, baseIntensity: 0.75 },   
-      { lat: 37.48, lng: 28.75, baseIntensity: 0.68 },   
-      { lat: 37.1, lng: 28.75, baseIntensity: 0.55 },    // Fethiye direction
-      { lat: 36.95, lng: 28.85, baseIntensity: 0.5 },    
-      { lat: 37.2, lng: 28.9, baseIntensity: 0.58 },     
-      { lat: 36.8, lng: 28.5, baseIntensity: 0.45 },     
-      { lat: 37.3, lng: 28.6, baseIntensity: 0.66 }      
-    ];
-
-    // Calculate intensity based on hour (peak 14:00-18:00)
-    function getIntensityAtHour(baseIntensity, hour) {
-      let factor = 1;
-      if (hour >= 14 && hour <= 18) {
-        factor = 1.3; // Peak hours
-      } else if (hour >= 12 && hour < 14) {
-        factor = 1.1; // Rising
-      } else if (hour >= 18 && hour <= 20) {
-        factor = 1.05; // Declining
-      } else if (hour >= 6 && hour < 12) {
-        factor = 0.4; // Morning low
-      } else {
-        factor = 0.3; // Evening/night low
-      }
-      return Math.min(baseIntensity * factor, 1.0);
-    }
-
-    // Generate heatmap data for current hour
-    function getHeatmapData(hour) {
-      return riskPoints.map(point => [
-        point.lat,
-        point.lng,
-        getIntensityAtHour(point.baseIntensity, hour)
-      ]);
-    }
-
-    // Count high-risk points (intensity > 0.7)
-    function countHighRiskPoints(hour) {
-      return riskPoints.filter(point => 
-        getIntensityAtHour(point.baseIntensity, hour) > 0.7
-      ).length;
-    }
-
-    // Map init
-    const map = L.map('map', {
-      center: [37.2, 28.3],
-      zoom: 10,
-      zoomControl: false
-    });
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 19
-    }).addTo(map);
-
-    // Fire origin point and spread simulation
-    const fireOrigin = { lat: 37.45, lng: 28.35 };
-    let windSpeed = 45; // km/h
-    let windDirection = 45; // degrees
-    let ellipseLayer = null;
-    let fireMarkerLayer = null;
-    let poiMarkers = [];
-    
-    // Route data
-    const shortestRoute = {
-      name: 'En Kısa Rota',
-      start: { lat: 37.215, lng: 28.363 },
-      end: { lat: 36.966, lng: 28.683 },
-      waypoints: [
-        [37.215, 28.363],
-        [37.15, 28.45],
-        [37.05, 28.55],
-        [36.966, 28.683]
-      ],
-      color: '#ff4444',
-      dashArray: '8,6',
-      weight: 3,
-      distance: 34,
-      riskScore: 0.87,
-      time: 42,
-      spreadRisk: 'Yüksek'
-    };
-
-    const safestRoute = {
-      name: 'En Güvenli Rota',
-      start: { lat: 37.215, lng: 28.363 },
-      end: { lat: 36.966, lng: 28.683 },
-      waypoints: [
-        [37.215, 28.363],
-        [37.3, 28.25],
-        [37.35, 28.1],
-        [37.0, 27.95],
-        [36.85, 28.2],
-        [36.966, 28.683]
-      ],
-      color: '#44ff88',
-      dashArray: 'none',
-      weight: 4,
-      distance: 47,
-      riskScore: 0.19,
-      time: 58,
-      spreadRisk: 'Düşük'
-    };
-
-    let routeLayerGroup = null;
-    let shortestRouteLayer = null;
-    let safestRouteLayer = null;
-
-    // Create fire marker with pulsing animation
-    function createFireMarker() {
-      const svg = `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="10" cy="10" r="8" fill="#ff0000" class="fire-marker"/>
-        <circle cx="10" cy="10" r="6" fill="#ff6b35" opacity="0.7"/>
-      </svg>`;
-      const iconUrl = 'data:image/svg+xml;base64,' + btoa(svg);
-      return L.icon({
-        iconUrl: iconUrl,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-        popupAnchor: [0, -10]
-      });
-    }
-
-    function addFireMarker() {
-      if (fireMarkerLayer) map.removeLayer(fireMarkerLayer);
-      const marker = L.marker([fireOrigin.lat, fireOrigin.lng], { icon: createFireMarker() });
-      marker.bindPopup('🔥 Yangın Başlangıç Noktası', { className: 'fire-popup' });
-      marker.addTo(map);
-      fireMarkerLayer = marker;
-    }
-
-    // Calculate ellipse points based on wind speed and direction
-    function calculateEllipse(center, windSpeedKmh, windDirectionDeg, numPoints = 60) {
-      const majorAxis = 0.8 + (windSpeedKmh / 80) * 1.5; // 0.8-2.3 km
-      const minorAxis = 0.4 + (windSpeedKmh / 80) * 0.8;  // 0.4-1.2 km
-      
-      const centerLat = center.lat;
-      const centerLng = center.lng;
-      const radPerDeg = Math.PI / 180;
-      const windRad = windDirectionDeg * radPerDeg;
-      
-      const points = [];
-      for (let i = 0; i < numPoints; i++) {
-        const angle = (i / numPoints) * Math.PI * 2;
-        
-        // Ellipse in local coords
-        let x = majorAxis * Math.cos(angle);
-        let y = minorAxis * Math.sin(angle);
-        
-        // Rotate by wind direction
-        const rotX = x * Math.cos(windRad) - y * Math.sin(windRad);
-        const rotY = x * Math.sin(windRad) + y * Math.cos(windRad);
-        
-        // Convert to lat/lng (approximate)
-        const latOffset = rotY / 111; // 1 degree latitude ≈ 111 km
-        const lngOffset = rotX / (111 * Math.cos(centerLat * radPerDeg));
-        
-        points.push([centerLat + latOffset, centerLng + lngOffset]);
-      }
-      points.push(points[0]); // Close polygon
-      return points;
-    }
-
-    // Calculate spread area in km²
-    function calculateSpreadArea(windSpeedKmh) {
-      const majorAxis = 0.8 + (windSpeedKmh / 80) * 1.5;
-      const minorAxis = 0.4 + (windSpeedKmh / 80) * 0.8;
-      return (Math.PI * majorAxis * minorAxis).toFixed(2);
-    }
-
-    // Update ellipse on spread layer
-    function updateEllipse() {
-      if (ellipseLayerGroup) map.removeLayer(ellipseLayerGroup);
-      ellipseLayerGroup = L.layerGroup();
-
-      if (spreadForecastEnabled) {
-        // T+0 (Current) - Dark Red
-        const points0 = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.0);
-        const ellipse0 = L.polygon(points0, {
-          color: '#cc3333',
-          weight: 2,
-          opacity: 0.9,
-          fillColor: '#ff0000',
-          fillOpacity: 0.7,
-          lineDash: [5, 5]
-        }).addTo(ellipseLayerGroup);
-        
-        // Add T+0 label
-        const label0Pos = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.0, 1);
-        if (label0Pos.length > 0) {
-          const labelPoint0 = label0Pos[Math.floor(label0Pos.length * 0.25)];
-          const label0Icon = L.divIcon({
-            html: `<div style="background: #cc3333; color: #fff; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 0 4px rgba(0,0,0,0.6);">T+0</div>`,
-            iconSize: [30, 20],
-            iconAnchor: [15, 10]
-          });
-          L.marker(labelPoint0, { icon: label0Icon }).addTo(ellipseLayerGroup);
-        }
-
-        // T+1 (1 hour) - Orange, 60% larger
-        const points1 = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.6);
-        const ellipse1 = L.polygon(points1, {
-          color: '#ff8800',
-          weight: 2,
-          opacity: 0.8,
-          fillColor: '#ff8800',
-          fillOpacity: 0.45,
-          lineDash: [8, 4]
-        }).addTo(ellipseLayerGroup);
-        
-        // Add T+1 label
-        if (points1.length > 0) {
-          const labelPoint1 = points1[Math.floor(points1.length * 0.5)];
-          const label1Icon = L.divIcon({
-            html: `<div style="background: #ff8800; color: #000; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 0 4px rgba(0,0,0,0.6);">T+1h</div>`,
-            iconSize: [35, 20],
-            iconAnchor: [17, 10]
-          });
-          L.marker(labelPoint1, { icon: label1Icon }).addTo(ellipseLayerGroup);
-        }
-
-        // T+2 (2 hours) - Yellow, 140% larger
-        const points2 = calculateEllipse(fireOrigin, windSpeed, windDirection, 2.4);
-        const ellipse2 = L.polygon(points2, {
-          color: '#ffff00',
-          weight: 2,
-          opacity: 0.7,
-          fillColor: '#ffff00',
-          fillOpacity: 0.25
-        }).addTo(ellipseLayerGroup);
-        
-        // Add T+2 label
-        if (points2.length > 0) {
-          const labelPoint2 = points2[Math.floor(points2.length * 0.75)];
-          const label2Icon = L.divIcon({
-            html: `<div style="background: #ffff00; color: #000; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 0 4px rgba(0,0,0,0.6);">T+2h</div>`,
-            iconSize: [35, 20],
-            iconAnchor: [17, 10]
-          });
-          L.marker(labelPoint2, { icon: label2Icon }).addTo(ellipseLayerGroup);
-        }
-      } else {
-        // Only T+0 (Current)
-        const points0 = calculateEllipse(fireOrigin, windSpeed, windDirection, 1.0);
-        const ellipse0 = L.polygon(points0, {
-          color: '#ff0000',
-          weight: 2,
-          opacity: 0.8,
-          fillColor: '#ff6b35',
-          fillOpacity: 0.25,
-          lineDash: [5, 5]
-        }).addTo(ellipseLayerGroup);
-      }
-
-      ellipseLayerGroup.addTo(map);
-      
-      const area = calculateSpreadArea(windSpeed);
-      document.getElementById('spreadAreaDisplay').textContent = area + ' km²';
-      
-      // Update POI markers if visible
-      if (document.querySelector('.toggle-btn[data-layer="poi"]').classList.contains('active')) {
-        addPoiMarkers();
-      }
-    }
-
-    // Add POI markers to map
-    function addPoiMarkers() {
-      poiMarkers.forEach(marker => map.removeLayer(marker));
-      poiMarkers = [];
-
-      const currentHour = parseInt(document.getElementById('timeSlider').value);
-
-      poiData.forEach(poi => {
-        const riskScore = calculateRiskScore(poi.lat, poi.lng);
-        const riskIntensity = getIntensityAtHour(riskScore, currentHour);
-        
-        // Get POI risk stage for spread zones
-        const riskStage = getPOIRiskStage(poi);
-        
-        let borderColor = '#888';
-        if (riskStage === 0) {
-          borderColor = '#ff0000'; // Red for T+0
-        } else if (riskStage === 1) {
-          borderColor = '#ff8800'; // Orange for T+1
-        } else if (riskStage === 2) {
-          borderColor = '#ffff00'; // Yellow for T+2
-        }
-        
-        const iconHtml = `<div style="
-          width: 24px; height: 24px; border-radius: 50%;
-          background: ${getPoiColor(poi.type)}; display: flex; align-items: center;
-          justify-content: center; color: ${poi.type === 'Köy' ? '#000' : '#fff'};
-          font-size: 14px; font-weight: bold; border: 3px solid ${borderColor};
-          box-shadow: 0 0 8px rgba(0,0,0,0.5);
-        ">${getPoiSymbol(poi.type)}</div>`;
-
-        const marker = L.marker([poi.lat, poi.lng], { 
-          icon: L.divIcon({
-            html: iconHtml,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
-            popupAnchor: [0, -12]
-          })
-        });
-        
-        const stageText = riskStage === 0 ? ' [T+0]' : (riskStage === 1 ? ' [T+1]' : (riskStage === 2 ? ' [T+2]' : ''));
-        
-        const popupContent = `
-          <div class="poi-popup-inner">
-            <div class="poi-popup-title">${poi.name}${stageText}</div>
-            <div class="poi-popup-line">
-              <span class="poi-popup-label">Tür:</span>
-              <span class="poi-popup-value">${poi.type}</span>
-            </div>
-            <div class="poi-popup-line">
-              <span class="poi-popup-label">Öncelik:</span>
-              <span class="poi-popup-value">${(poi.priority * 100).toFixed(0)}%</span>
-            </div>
-            <div class="poi-popup-line">
-              <span class="poi-popup-label">Nüfus:</span>
-              <span class="poi-popup-value">${poi.population}</span>
-            </div>
-            <div class="poi-popup-line">
-              <span class="poi-popup-label">Risk Skoru:</span>
-              <span class="poi-popup-value">${(riskIntensity * 100).toFixed(1)}%</span>
-            </div>
+          <div class="slope-cell" style="border-left:3px solid #ff8800;">
+            <div class="slope-cell-lbl">Orta</div>
+            <div class="slope-bar" style="background:rgba(255,140,0,.4);"></div>
+            <div class="slope-cell-sub">30-60%</div>
           </div>
-        `;
-        
-        marker.bindPopup(popupContent, { className: 'poi-popup', maxWidth: 200 });
-        marker.addTo(map);
-        poiMarkers.push(marker);
-      });
+          <div class="slope-cell" style="border-left:3px solid #ff2222;">
+            <div class="slope-cell-lbl">Yüksek</div>
+            <div class="slope-bar" style="background:rgba(255,0,0,.5);"></div>
+            <div class="slope-cell-sub">60-80%</div>
+          </div>
+          <div class="slope-cell" style="border-left:3px solid #ff6b35;">
+            <div class="slope-cell-lbl">Kritik</div>
+            <div class="slope-bar" style="background:rgba(255,107,53,.6);"></div>
+            <div class="slope-cell-sub">80%+</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spread-info" style="margin-top:12px;">
+        Yayılım Alanı: <span id="areaDisp">2.53 km²</span>
+      </div>
+
+      <div class="stage-leg">
+        <div class="srow"><div class="sdot" style="background:#cc3333;"></div>T+0 (Mevcut)</div>
+        <div class="srow"><div class="sdot" style="background:#ff8800;"></div>T+1 saat (%60 büyük)</div>
+        <div class="srow"><div class="sdot" style="background:#ffff00;"></div>T+2 saat (%140 büyük)</div>
+      </div>
+    </div>
+
+    <!-- Evacuation List -->
+    <div class="glass pad">
+      <div class="panel-title">Tahliye Öncelik Listesi</div>
+      <div id="evacList"></div>
+    </div>
+
+    <!-- Time Slider -->
+    <div class="glass pad">
+      <div class="time-lbl">Saat: <span id="timeDisp">14:00</span></div>
+      <input type="range" id="timeSlider" min="6" max="23" value="14">
+      <div class="time-info">
+        <span id="hrCount">Yüksek Riskli: —</span>
+      </div>
+    </div>
+
+    <!-- Risk Report (Rapor toggle) -->
+    <div class="glass pad hidden" id="reportPanel">
+      <div class="panel-title">Gerçek Zamanlı Risk Analizi</div>
+      <div class="ctrl-lbl" style="margin-bottom:5px;">Genel Risk Seviyesi <span id="overallRiskDisp">—</span></div>
+      <div class="risk-bar-wrap"><div class="risk-bar-fill" id="overallRiskBar" style="width:0;"></div></div>
+      <div class="spread-info" style="margin-top:10px;">
+        Yüksek Risk Bölgeleri: <span id="highRiskCount">—</span><br>
+        Uyarı Durumu: <span id="alertStatus" style="color:#ff8800;">—</span>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="panel-title" style="font-size:11px;margin-bottom:8px;">Risk Bölgeleri</div>
+        <div id="riskZoneList"></div>
+      </div>
+    </div>
+
+    <!-- Fire Spread Model (Yayılma toggle) -->
+    <div class="glass pad hidden" id="modelPanel">
+      <div class="panel-title">Yangın Yayılma Analizi</div>
+      <div class="ctrl-row">
+        <div class="ctrl-lbl">Rüzgar Hızı <span id="mwsDisp">30 km/h</span></div>
+        <input type="range" id="mwsSlider" min="10" max="80" value="30">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-lbl">Nem Oranı <span id="mhumDisp">%35</span></div>
+        <input type="range" id="mhumSlider" min="5" max="90" value="35">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-lbl">Orman Yoğunluğu <span id="mdenDisp">%65</span></div>
+        <input type="range" id="mdenSlider" min="20" max="95" value="65">
+      </div>
+      <div class="ctrl-row" style="margin-bottom:0;">
+        <div class="ctrl-lbl">Sıcaklık Etkisi <span id="mtempDisp">%45</span></div>
+        <input type="range" id="mtempSlider" min="10" max="100" value="45">
+      </div>
+      <div style="margin-top:14px; padding:12px; background:rgba(255,107,53,.07); border:1px solid rgba(255,107,53,.15); border-radius:8px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6b7280;letter-spacing:.5px;margin-bottom:6px;">🔥 YAYILMA SKORU</div>
+        <div class="model-score" id="modelScore">0.74</div>
+        <div class="model-bar"><div class="model-fill" id="modelFill" style="width:74%;"></div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6b7280;">
+          Yangın <strong style="color:#e6edf3;" id="modelInterp">ÇOK HIZLI</strong> yayılıyor
+        </div>
+        <div class="alert-box red" style="margin-top:8px;text-align:center;font-weight:700;">
+          ⏱ Müdahale: <span id="modelTime">20 dakika</span>
+        </div>
+      </div>
+      <div class="model-detail-grid">
+        <div class="mdl-cell"><div class="mdl-cell-lbl">Saatlik Yayılma</div><div class="mdl-cell-val" id="mHourly">2.4 km²</div></div>
+        <div class="mdl-cell"><div class="mdl-cell-lbl">Alev Yüksekliği</div><div class="mdl-cell-val" id="mFlame">18 m</div></div>
+        <div class="mdl-cell"><div class="mdl-cell-lbl">Kritik Bölge</div><div class="mdl-cell-val" id="mCritical">6.2 km²</div></div>
+        <div class="mdl-cell"><div class="mdl-cell-lbl">Tahliye Zamanı</div><div class="mdl-cell-val" id="mEvac">18 dk</div></div>
+      </div>
+      <div class="alert-box blue" style="margin-top:10px;">ℹ️ Düşük nem + yüksek rüzgar = hızlı yayılma</div>
+    </div>
+
+    <!-- Route Comparison (Rota toggle) -->
+    <div class="glass pad hidden" id="routePanel">
+      <div class="panel-title">Rota Karşılaştırması</div>
+      <table class="route-table">
+        <thead>
+          <tr><th></th><th class="col-short">En Kısa</th><th class="col-safe">En Güvenli</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Mesafe</td><td class="col-short">34 km</td><td class="col-safe">47 km</td></tr>
+          <tr><td>Risk Skoru</td><td class="col-short">0.87</td><td class="col-safe">0.19</td></tr>
+          <tr><td>Tahmini Süre</td><td class="col-short">42 dk</td><td class="col-safe">58 dk</td></tr>
+          <tr><td>Yayılım Riski</td><td class="col-short">Yüksek</td><td class="col-safe">Düşük</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ══════ RIGHT PANEL ══════ -->
+  <div id="right-panel">
+
+    <!-- System Events (always visible) -->
+    <div class="glass ev-box">
+      <div class="ev-header">Sistem Olayları</div>
+      <div class="ev-scroll" id="evLog"></div>
+    </div>
+
+    <!-- Regional Risk (Rapor toggle) -->
+    <div class="glass hidden" id="regionalBox">
+      <div class="ev-header">Bölgesel Risk Analizleri</div>
+      <div style="padding:10px; overflow-y:auto; max-height:320px; scrollbar-width:thin; scrollbar-color:rgba(255,107,53,.25) transparent;">
+        <div id="regionalList"></div>
+      </div>
+    </div>
+
+    <!-- Yangın Riski Yüksek Bölgeler (Rapor toggle) -->
+    <div class="glass fire-risk-box hidden" id="fireRiskBox">
+      <div class="fire-risk-header">
+        <span class="fh-icon">⚠️</span>
+        YANGIN RİSKİ YÜKSEK BÖLGELER
+      </div>
+      <div id="fireRiskList"></div>
+    </div>
+
+  </div>
+
+  <!-- ══════ BOTTOM BAR ══════ -->
+  <div id="bottombar">
+    <div id="coords"><span>LAT</span> 37.0707 &nbsp;<span>LNG</span> 28.3000</div>
+    <div id="attrib">Leaflet © CARTO</div>
+  </div>
+
+</div><!-- /ui -->
+
+<script>
+  const API_BASE = 'http://localhost:8000';
+let apiData = { riskMap: [], route: [], spread: [], roads: [] };
+
+async function fetchAllData() {
+  addEvent('API bağlantısı kuruluyor...', 'info');
+  try {
+    const [riskRes, routeRes, spreadRes, roadsRes] = await Promise.all([
+      fetch(`${API_BASE}/risk-map`),
+      fetch(`${API_BASE}/route`),
+      fetch(`${API_BASE}/spread`),
+      fetch(`${API_BASE}/roads`),
+    ]);
+    apiData.riskMap = await riskRes.json();
+    apiData.route   = await routeRes.json();
+    apiData.spread  = await spreadRes.json();
+    apiData.roads   = await roadsRes.json();
+
+    applyRiskMapData();
+    applyRouteData();
+    applyRoadsData();
+    applySpreadData();
+  } catch (err) {
+    addEvent('API bağlantı hatası – simülasyon verisi kullanılıyor', 'warn');
+  }
+}
+
+function applyRiskMapData() {
+  if (!apiData.riskMap.length) return;
+  apiData.riskMap.forEach(ap => {
+    const idx = POI.findIndex(p => Math.abs(p.lat - ap.lat) < 0.001 && Math.abs(p.lng - ap.lon) < 0.001);
+    if (idx !== -1) {
+      POI[idx]._risk = ap.risk; POI[idx]._spread = ap.spread;
+      POI[idx]._wind = ap.wind; POI[idx]._humidity = ap.humidity;
+      POI[idx]._temp = ap.temperature; POI[idx]._elev = ap.elevation;
+      POI[idx]._slope = ap.slope_deg;
     }
+  });
+  RISK_PTS.length = 0;
+  apiData.riskMap.forEach(ap => RISK_PTS.push({ lat: ap.lat, lng: ap.lon, bi: Math.min(ap.risk / 50, 1.0) }));
+  const maxRisk = Math.max(...apiData.riskMap.map(p => p.risk));
+  const highRisk = apiData.riskMap.filter(p => p.risk > 25);
+  const totalPop = POI.filter(p => p._risk && p._risk > 25).reduce((a, p) => a + p.pop, 0);
+  document.getElementById('sv-risk').textContent  = maxRisk.toFixed(1);
+  document.getElementById('sv-alert').textContent = highRisk.length;
+  document.getElementById('sv-pop').textContent   = totalPop.toLocaleString('tr-TR');
+  renderHeat(); renderPOI(); renderEvac(); updateStats();
+  addEvent(`En yüksek risk: ${maxRisk.toFixed(1)} – ${highRisk.length} kritik bölge`, 'warn');
+}
 
-    function getPoiColor(type) {
-      switch(type) {
-        case 'Hastane': return '#ff0000';
-        case 'Okul': return '#0066ff';
-        case 'Köy': return '#ffff00';
-        case 'Hayvancılık': return '#00ff00';
-        default: return '#888888';
-      }
+function applyRouteData() {
+  if (!apiData.route.length) return;
+  document.getElementById('evacList').innerHTML = apiData.route.slice(0, 5).map((p, i) => {
+    const risk = p.risk || 0;
+    const cls  = risk > 30 ? 'critical' : risk > 20 ? 'high' : 'medium';
+    const lbl  = { critical: 'KRİTİK', high: 'YÜKSEK', medium: 'ORTA' }[cls];
+    const name = POI.find(poi => Math.abs(poi.lat - p.lat) < 0.001 && Math.abs(poi.lng - p.lon) < 0.001)?.name || `Nokta ${p.order}`;
+    return `<div class="evac-item">
+      <div class="evac-rank">${i + 1}</div>
+      <div style="flex:1"><div class="evac-name">${name}</div><div class="evac-score">Risk: ${risk.toFixed(1)} | Öncelik: ${(p.priority||0).toFixed(2)}</div></div>
+      <div class="badge ${cls}">${lbl}</div>
+    </div>`;
+  }).join('');
+  addEvent(`Tahliye rotası hesaplandı – ${apiData.route.length} durak`, 'info');
+}
+
+let roadsLayer = null;
+function applyRoadsData() {
+  if (!apiData.roads.length) return;
+  if (roadsLayer) { map.removeLayer(roadsLayer); roadsLayer = null; }
+  roadsLayer = L.layerGroup();
+  apiData.roads.forEach(road => {
+    if (!road.geometry || road.geometry.length < 2) return;
+    const coords = road.geometry.map(g => [g.lat, g.lon]);
+    const color  = road.safety >= 0.85 ? '#44ff88' : road.safety >= 0.70 ? '#ffff00' : '#ff8800';
+    L.polyline(coords, { color, weight: 2, opacity: 0.55 })
+     .bindPopup(`<div class="pop-inner"><div class="pop-title">Yol</div><div class="pop-row"><span class="pop-key">Tür:</span><span class="pop-val">${road.road_type}</span></div><div class="pop-row"><span class="pop-key">Güvenlik:</span><span class="pop-val">${(road.safety*100).toFixed(0)}%</span></div></div>`)
+     .addTo(roadsLayer);
+  });
+  roadsLayer.addTo(map);
+  addEvent(`${apiData.roads.length} yol segmenti haritaya işlendi`, 'info');
+}
+
+function applySpreadData() {
+  if (!apiData.spread.length) return;
+  [...apiData.spread].sort((a, b) => b.prob - a.prob).slice(0, 5).forEach(edge => {
+    addEvent(`Yayılım: ${edge.from} → ${edge.to} (%${(edge.prob*100).toFixed(0)})`, edge.prob > 0.8 ? 'crit' : 'warn');
+  });
+  addEvent(`Toplam ${apiData.spread.length} yayılım kenarı analiz edildi`, 'info');
+}
+
+function buildPopup(poi, ri, stage) {
+  const stageStr = stage === 0 ? ' [T+0]' : stage === 1 ? ' [T+1]' : stage === 2 ? ' [T+2]' : '';
+  return `<div class="pop-inner">
+    <div class="pop-title">${poi.name}${stageStr}</div>
+    <div class="pop-row"><span class="pop-key">Tür:</span><span class="pop-val">${poi.type}</span></div>
+    <div class="pop-row"><span class="pop-key">Nüfus:</span><span class="pop-val">${poi.pop}</span></div>
+    <div class="pop-row"><span class="pop-key">Risk:</span><span class="pop-val">${poi._risk != null ? poi._risk.toFixed(1) : (ri*100).toFixed(1)}</span></div>
+    <div class="pop-row"><span class="pop-key">Rüzgar:</span><span class="pop-val">${poi._wind != null ? poi._wind.toFixed(1)+' km/h' : '—'}</span></div>
+    <div class="pop-row"><span class="pop-key">Nem:</span><span class="pop-val">${poi._humidity != null ? '%'+poi._humidity : '—'}</span></div>
+    <div class="pop-row"><span class="pop-key">Sıcaklık:</span><span class="pop-val">${poi._temp != null ? poi._temp.toFixed(1)+'°C' : '—'}</span></div>
+    <div class="pop-row"><span class="pop-key">Eğim:</span><span class="pop-val">${poi._slope != null ? poi._slope.toFixed(1)+'°' : '—'}</span></div>
+  </div>`;
+}
+/* ═══════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════ */
+const POI = [
+  {name:'Muğla Eğitim Araştırma Hastanesi',type:'Hastane',pri:1.0,pop:5000,lat:37.2153,lng:28.3636},
+  {name:'Marmaris Devlet Hastanesi',type:'Hastane',pri:1.0,pop:3000,lat:36.8555,lng:28.2771},
+  {name:'Bodrum Devlet Hastanesi',type:'Hastane',pri:1.0,pop:2500,lat:37.0344,lng:27.4305},
+  {name:'Fethiye Devlet Hastanesi',type:'Hastane',pri:1.0,pop:2800,lat:36.6556,lng:29.1243},
+  {name:'Köyceğiz Devlet Hastanesi',type:'Hastane',pri:1.0,pop:1500,lat:36.9728,lng:28.6833},
+  {name:'Milas İlçe Merkezi',type:'Okul',pri:0.85,pop:1200,lat:37.3167,lng:27.7833},
+  {name:'Datça İlçe Merkezi',type:'Okul',pri:0.85,pop:800,lat:36.7269,lng:27.6908},
+  {name:'Ortaca İlçe Merkezi',type:'Okul',pri:0.85,pop:900,lat:36.8333,lng:28.7667},
+  {name:'Yatağan İlçe Merkezi',type:'Okul',pri:0.85,pop:1100,lat:37.3333,lng:28.1333},
+  {name:'Seydikemer Merkezi',type:'Okul',pri:0.85,pop:700,lat:36.7500,lng:29.0000},
+  {name:'Turunç Köyü',type:'Köy',pri:0.70,pop:450,lat:36.7700,lng:28.2800},
+  {name:'Bayır Köyü',type:'Köy',pri:0.70,pop:380,lat:36.9200,lng:28.3500},
+  {name:'Hisarönü',type:'Köy',pri:0.70,pop:520,lat:36.8100,lng:28.1600},
+  {name:'Orhaniye Köyü',type:'Köy',pri:0.70,pop:420,lat:36.9000,lng:28.2200},
+  {name:'Selimiye Köyü',type:'Köy',pri:0.70,pop:360,lat:36.8300,lng:28.1900},
+  {name:'Çamlı Köyü',type:'Köy',pri:0.70,pop:410,lat:36.8700,lng:28.1700},
+  {name:'Çetibeli Köyü',type:'Köy',pri:0.70,pop:390,lat:36.9300,lng:28.2100},
+  {name:'Karaca Köyü',type:'Köy',pri:0.70,pop:440,lat:36.9500,lng:28.1500},
+  {name:'Karacasöğüt Köyü',type:'Köy',pri:0.70,pop:370,lat:36.9500,lng:28.1000},
+  {name:'Gökova Köyü',type:'Köy',pri:0.70,pop:480,lat:37.0300,lng:28.3500},
+  {name:'Kıran Köyü',type:'Köy',pri:0.70,pop:350,lat:37.0500,lng:28.3200},
+  {name:'Kuyucak Köyü',type:'Köy',pri:0.70,pop:400,lat:37.0700,lng:28.3000},
+  {name:'Sarnıç Köyü',type:'Köy',pri:0.70,pop:360,lat:37.0200,lng:28.4000},
+  {name:'Çiçekli Köyü',type:'Köy',pri:0.70,pop:430,lat:37.1000,lng:28.4500},
+  {name:'Armutçuk Köyü',type:'Köy',pri:0.70,pop:380,lat:37.1200,lng:28.4200},
+  {name:'Kıyra Köyü',type:'Köy',pri:0.70,pop:420,lat:37.0800,lng:28.4700},
+  {name:'Emecik Köyü',type:'Köy',pri:0.70,pop:340,lat:36.7800,lng:27.5800},
+  {name:'Kovanlık Köyü',type:'Köy',pri:0.70,pop:310,lat:36.7500,lng:27.6200},
+  {name:'Döğüşbelen Köyü',type:'Köy',pri:0.70,pop:390,lat:37.0200,lng:28.7000},
+  {name:'Hamitköy',type:'Köy',pri:0.70,pop:360,lat:36.9500,lng:28.7200},
+  {name:'Kavaklıdere Çiftliği',type:'Hayvancılık',pri:0.55,pop:200,lat:37.4333,lng:28.3833},
+  {name:'Menteşe Ahırları',type:'Hayvancılık',pri:0.55,pop:180,lat:37.1800,lng:28.3000},
+  {name:'Çamarası Çiftliği',type:'Hayvancılık',pri:0.55,pop:160,lat:37.0600,lng:27.5500},
+  {name:'Sakar Ormanı Ahır',type:'Hayvancılık',pri:0.55,pop:140,lat:37.0500,lng:28.6000},
+  {name:'Yatağan Büyükbaş',type:'Hayvancılık',pri:0.55,pop:190,lat:37.3500,lng:28.1500},
+  {name:'Milas Küçükbaş',type:'Hayvancılık',pri:0.55,pop:170,lat:37.2900,lng:27.8200},
+];
+
+const RISK_PTS = [
+  {lat:37.20,lng:28.30,bi:0.60},{lat:37.15,lng:28.25,bi:0.50},{lat:37.25,lng:28.35,bi:0.70},
+  {lat:37.10,lng:28.40,bi:0.45},{lat:37.30,lng:28.20,bi:0.55},{lat:37.05,lng:28.25,bi:0.65},
+  {lat:36.95,lng:28.35,bi:0.48},{lat:36.85,lng:28.20,bi:0.52},{lat:37.35,lng:28.45,bi:0.60},
+  {lat:37.40,lng:28.50,bi:0.70},{lat:37.45,lng:28.35,bi:0.58},{lat:37.38,lng:28.25,bi:0.62},
+  {lat:37.50,lng:28.60,bi:0.72},{lat:37.55,lng:28.68,bi:0.75},{lat:37.48,lng:28.75,bi:0.68},
+  {lat:37.10,lng:28.75,bi:0.55},{lat:36.95,lng:28.85,bi:0.50},{lat:37.20,lng:28.90,bi:0.58},
+  {lat:36.80,lng:28.50,bi:0.45},{lat:37.30,lng:28.60,bi:0.66},
+];
+
+const RISK_ZONES = [
+  {name:'Marmaris Kıyısı',     center:{lat:36.85,lng:28.27}, baseRisk:0.78},
+  {name:'Bodrum Yat Limanı',   center:{lat:37.03,lng:27.42}, baseRisk:0.72},
+  {name:'Orman Köyleri Bölgesi',center:{lat:37.15,lng:28.40},baseRisk:0.85},
+  {name:'Muğla Merkez',        center:{lat:37.21,lng:28.36}, baseRisk:0.65},
+  {name:'Fethiye Bölgesi',     center:{lat:36.65,lng:29.12}, baseRisk:0.70},
+  {name:'Köyceğiz Gölü Çevresi',center:{lat:36.97,lng:28.68},baseRisk:0.62},
+  {name:'Dalyan Delta',         center:{lat:36.82,lng:28.65}, baseRisk:0.58},
+  {name:'Milas Tarım Alanı',   center:{lat:37.28,lng:27.80}, baseRisk:0.48},
+];
+
+const REGIONS = [
+  {name:'🏥 Sağlık Birimleri',    zoneIdxs:[0,2], icon:'🏥'},
+  {name:'🏘️ Yerleşim Alanları',  zoneIdxs:[2,3], icon:'🏘️'},
+  {name:'🌊 Kıyı Bölgeleri',      zoneIdxs:[0,1], icon:'🌊'},
+  {name:'💧 Su Kaynakları',       zoneIdxs:[5,6], icon:'💧'},
+  {name:'🌾 Tarım Alanları',      zoneIdxs:[4,7], icon:'🌾'},
+];
+
+const FIRE_RISK_ZONES = [
+  {name:'Bodrum Yarımadası Kuzey', pct:78, temp:35, nem:18, wind:40, agac:'Makiler',   icon:'🔴'},
+  {name:'Datça Yarımadası',        pct:72, temp:34, nem:22, wind:35, agac:'Kozalak',   icon:'🔴'},
+  {name:'Muğla Kuzey Ormanları',   pct:61, temp:32, nem:28, wind:28, agac:'Karaçam',  icon:'🟡'},
+  {name:'Fethiye Bölgesi Güney',   pct:58, temp:31, nem:30, wind:25, agac:'Kızılçam', icon:'🟡'},
+];
+
+const FIRE = {lat:37.45, lng:28.35};
+
+/* ═══════════════════════════════════════════════════
+   MAP
+═══════════════════════════════════════════════════ */
+const map = L.map('map',{center:[37.05,28.35],zoom:9,zoomControl:false,preferCanvas:true});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; CARTO', subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+let windSpeed=45, windDir=45, forecastOn=true, forestDensityFactor=0.65, currentHour=14;
+let heatLayer=null, ellipseGroup=null, routeLayer=null;
+let poiMarkers=[];
+
+/* ═══════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════ */
+function hourFactor(h){
+  if(h>=14&&h<=18) return 1.3;
+  if(h>=12&&h<14)  return 1.1;
+  if(h>=18&&h<=20) return 1.05;
+  if(h>=6&&h<12)   return 0.4;
+  return 0.3;
+}
+function intensityAt(bi,h){ return Math.min(bi*hourFactor(h),1); }
+function heatData(h){ return RISK_PTS.map(p=>[p.lat,p.lng,intensityAt(p.bi,h)]); }
+function countHigh(h){ return RISK_PTS.filter(p=>intensityAt(p.bi,h)>0.7).length; }
+function riskScore(lat,lng){
+  let md=Infinity,ci=0.5;
+  RISK_PTS.forEach(p=>{ const d=Math.hypot(p.lat-lat,p.lng-lng); if(d<md){md=d;ci=p.bi;} });
+  return Math.max(0.1,ci-md*0.2);
+}
+function closest(arr,lat,lng){ let best=arr[0],md=Infinity; arr.forEach(p=>{ const d=Math.hypot(p.lat-lat,p.lng-lng); if(d<md){md=d;best=p;} }); return best; }
+
+function inEllipse(pt,ws,wd,mult){
+  const maj=(0.8+(ws/80)*1.5)*mult, min=(0.4+(ws/80)*0.8)*mult;
+  const rad=wd*Math.PI/180;
+  const yL=(pt.lat-FIRE.lat)*111;
+  const xL=(pt.lng-FIRE.lng)*111*Math.cos(FIRE.lat*Math.PI/180);
+  const rX=xL*Math.cos(-rad)-yL*Math.sin(-rad);
+  const rY=xL*Math.sin(-rad)+yL*Math.cos(-rad);
+  return rX*rX/(maj*maj)+rY*rY/(min*min)<=1;
+}
+function poiStage(poi){
+  if(inEllipse(poi,windSpeed,windDir,1.0)) return 0;
+  if(inEllipse(poi,windSpeed,windDir,1.6)) return 1;
+  if(inEllipse(poi,windSpeed,windDir,2.4)) return 2;
+  return null;
+}
+
+function ellipsePoints(ws,wd,mult,n=72){
+  const maj=(0.8+(ws/80)*1.5)*mult, min=(0.4+(ws/80)*0.8)*mult;
+  const rad=wd*Math.PI/180, pts=[];
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2;
+    const x=maj*Math.cos(a),y=min*Math.sin(a);
+    const rX=x*Math.cos(rad)-y*Math.sin(rad);
+    const rY=x*Math.sin(rad)+y*Math.cos(rad);
+    pts.push([FIRE.lat+rY/111, FIRE.lng+rX/(111*Math.cos(FIRE.lat*Math.PI/180))]);
+  }
+  pts.push(pts[0]); return pts;
+}
+function spreadArea(ws){ const maj=0.8+(ws/80)*1.5,min=0.4+(ws/80)*0.8; return (Math.PI*maj*min).toFixed(2); }
+
+function poiColor(t){ return {Hastane:'#ff2222',Okul:'#2266ff',Köy:'#ffee00',Hayvancılık:'#22dd55'}[t]||'#888'; }
+function poiSym(t)  { return {Hastane:'+',Okul:'🏢',Köy:'🏘',Hayvancılık:'·'}[t]||'·'; }
+function stageBorder(s){ return ['#ff0000','#ff8800','#ffff00'][s]||'rgba(180,180,180,.35)'; }
+
+function riskClass(pct){ return pct>75?'critical':pct>60?'high':pct>40?'medium':'low'; }
+function riskLabel(cls){ return {critical:'KRİTİK',high:'YÜKSEK',medium:'ORTA',low:'DÜŞÜK'}[cls]||''; }
+function riskColor(cls){ return {critical:'#ff2222',high:'#ff8800',medium:'#ffff00',low:'#44ff88'}[cls]||'#888'; }
+
+/* ═══════════════════════════════════════════════════
+   RENDER: HEATMAP
+═══════════════════════════════════════════════════ */
+function renderHeat(){
+  if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}
+  if(!toggleState.risk) return;
+  heatLayer=L.heatLayer(heatData(currentHour),{
+    radius:40,blur:22,maxZoom:14,
+    gradient:{0:'#00ff00',0.35:'#ffff00',0.65:'#ff8800',1:'#ff0000'}
+  }).addTo(map);
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER: ELLIPSE
+═══════════════════════════════════════════════════ */
+function ellipseLabel(grp,pts,frac,text,bg,tc){
+  const pt=pts[Math.floor(pts.length*frac)];
+  const icon=L.divIcon({
+    html:`<div style="background:${bg};color:${tc};padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.7);">${text}</div>`,
+    iconSize:[36,18],iconAnchor:[18,9]
+  });
+  L.marker(pt,{icon}).addTo(grp);
+}
+
+function renderEllipse(){
+  if(ellipseGroup){map.removeLayer(ellipseGroup);ellipseGroup=null;}
+  if(!toggleState.spread) return;
+  ellipseGroup=L.layerGroup();
+
+  if(forecastOn){
+    const p0=ellipsePoints(windSpeed,windDir,1.0);
+    L.polygon(p0,{color:'#cc3333',weight:2.5,opacity:1,fillColor:'#ff2200',fillOpacity:0.42,dashArray:'6,4'}).addTo(ellipseGroup);
+    ellipseLabel(ellipseGroup,p0,0.25,'T+0','#cc3333','#fff');
+
+    const p1=ellipsePoints(windSpeed,windDir,1.6);
+    L.polygon(p1,{color:'#ff8800',weight:2,opacity:.9,fillColor:'#ff8800',fillOpacity:0.20,dashArray:'8,4'}).addTo(ellipseGroup);
+    ellipseLabel(ellipseGroup,p1,0.5,'T+1h','#ff8800','#000');
+
+    const p2=ellipsePoints(windSpeed,windDir,2.4);
+    L.polygon(p2,{color:'#ffff00',weight:1.5,opacity:.75,fillColor:'#ffff00',fillOpacity:0.09}).addTo(ellipseGroup);
+    ellipseLabel(ellipseGroup,p2,0.75,'T+2h','#dddd00','#000');
+  } else {
+    const p0=ellipsePoints(windSpeed,windDir,1.0);
+    L.polygon(p0,{color:'#ff0000',weight:2,fillColor:'#ff6b35',fillOpacity:.22,dashArray:'5,5'}).addTo(ellipseGroup);
+  }
+
+  const fireIcon=L.divIcon({html:`<div style="font-size:18px;filter:drop-shadow(0 0 8px #ff6b35);">🔥</div>`,iconSize:[22,22],iconAnchor:[11,11]});
+  L.marker([FIRE.lat,FIRE.lng],{icon:fireIcon}).addTo(ellipseGroup);
+  ellipseGroup.addTo(map);
+  document.getElementById('areaDisp').textContent=spreadArea(windSpeed)+' km²';
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER: POI
+═══════════════════════════════════════════════════ */
+function renderPOI(){
+  poiMarkers.forEach(m=>map.removeLayer(m));
+  poiMarkers=[];
+  if(!toggleState.poi) return;
+
+  POI.forEach(poi=>{
+    const rs=riskScore(poi.lat,poi.lng);
+    const ri=intensityAt(rs,currentHour);
+    const stage=poiStage(poi);
+    const bc=stageBorder(stage);
+    const tc=poi.type==='Köy'?'#000':'#fff';
+
+    const iconHtml=`<div style="width:26px;height:26px;border-radius:50%;background:${poiColor(poi.type)};display:flex;align-items:center;justify-content:center;color:${tc};font-size:13px;font-weight:900;border:3px solid ${bc};box-shadow:0 0 10px rgba(0,0,0,.7);">${poiSym(poi.type)}</div>`;
+
+    const popup = buildPopup(poi, ri, stage);
+
+    const m=L.marker([poi.lat,poi.lng],{
+      icon:L.divIcon({html:iconHtml,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-13]})
+    }).bindPopup(popup,{maxWidth:220}).addTo(map);
+    poiMarkers.push(m);
+  });
+
+  const kuyucak=poiMarkers[POI.findIndex(p=>p.name==='Kuyucak Köyü')];
+  if(kuyucak) setTimeout(()=>kuyucak.openPopup(),700);
+}
+/* ═══════════════════════════════════════════════════
+   RENDER: ROUTE
+═══════════════════════════════════════════════════ */
+function renderRoute(){
+  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
+  if(!toggleState.route) return;
+
+  routeLayer=L.layerGroup();
+  const shortWay=[[37.215,28.363],[37.15,28.45],[37.05,28.55],[36.966,28.683]];
+  const safeWay =[[37.215,28.363],[37.3,28.25],[37.35,28.1],[37.0,27.95],[36.85,28.2],[36.966,28.683]];
+
+  L.polyline(shortWay,{color:'#ff4444',weight:3,dashArray:'8,5',opacity:.85}).addTo(routeLayer);
+  L.polyline(safeWay, {color:'#44ff88',weight:4,opacity:.9}).addTo(routeLayer);
+
+  const mk=(lat,lng,lbl,col)=>{
+    const icon=L.divIcon({html:`<div style="background:${col};color:#000;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;border:2px solid #0a0e14;box-shadow:0 0 10px ${col};">${lbl}</div>`,iconSize:[20,20],iconAnchor:[10,10]});
+    L.marker([lat,lng],{icon}).addTo(routeLayer);
+  };
+  mk(37.215,28.363,'S','#ffff00');
+  mk(36.966,28.683,'H','#44ff88');
+  routeLayer.addTo(map);
+  addEvent('Güvenli rota hesaplandı – kaçış yolu çizildi','info');
+}
+
+/* ═══════════════════════════════════════════════════
+   EVACUATION LIST
+═══════════════════════════════════════════════════ */
+function renderEvac(){
+  const scored=POI.map(p=>({...p,score:parseFloat((intensityAt(riskScore(p.lat,p.lng),currentHour)*p.pri).toFixed(3))}))
+    .sort((a,b)=>b.score-a.score).slice(0,5);
+
+  document.getElementById('evacList').innerHTML=scored.map((p,i)=>{
+    const cls=p.score>=0.7?'critical':p.score>=0.5?'high':'medium';
+    return `<div class="evac-item">
+      <div class="evac-rank">${i+1}</div>
+      <div style="flex:1"><div class="evac-name">${p.name}</div><div class="evac-score">Score: ${p.score.toFixed(3)}</div></div>
+      <div class="badge ${cls}">${riskLabel(cls)}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   STATS
+═══════════════════════════════════════════════════ */
+function updateStats(){
+  const hr=countHigh(currentHour);
+  const pop=POI.reduce((a,p)=>a+(intensityAt(riskScore(p.lat,p.lng),currentHour)>0.5?p.pop:0),0);
+  const maxR=Math.max(...RISK_PTS.map(p=>intensityAt(p.bi,currentHour)));
+  document.getElementById('sv-pop').textContent   = pop.toLocaleString('tr-TR');
+  document.getElementById('sv-alert').textContent = hr;
+  document.getElementById('sv-risk').textContent  = maxR.toFixed(2);
+  document.getElementById('hrCount').textContent  = 'Yüksek Riskli: '+hr;
+}
+
+/* ═══════════════════════════════════════════════════
+   RISK REPORT
+═══════════════════════════════════════════════════ */
+function updateReport(){
+  const zoneRisks=RISK_ZONES.map(z=>Math.min(z.baseRisk*hourFactor(currentHour),1));
+  const avg=Math.round(zoneRisks.reduce((a,v)=>a+v,0)/zoneRisks.length*100);
+  const highCount=zoneRisks.filter(r=>r>0.65).length;
+
+  document.getElementById('overallRiskDisp').textContent='%'+avg;
+  document.getElementById('overallRiskBar').style.width=avg+'%';
+  document.getElementById('highRiskCount').textContent=highCount;
+  document.getElementById('alertStatus').textContent=avg>70?'KRİTİK':avg>55?'YÜKSEK':'ORTA';
+  document.getElementById('alertStatus').style.color=avg>70?'#ff3333':avg>55?'#ff8800':'#ffff00';
+
+  // left panel zone list
+  document.getElementById('riskZoneList').innerHTML=RISK_ZONES.map((z,i)=>{
+    const pct=Math.round(zoneRisks[i]*100);
+    const cls=riskClass(pct);
+    return `<div class="risk-zone-row">
+      <div class="zone-name">${z.name}</div>
+      <div class="zone-pct">%${pct}</div>
+      <div class="badge ${cls}">${riskLabel(cls)}</div>
+    </div>`;
+  }).join('');
+
+  // regional
+  document.getElementById('regionalList').innerHTML=REGIONS.map(r=>{
+    const avgRisk=Math.round(r.zoneIdxs.reduce((a,i)=>a+zoneRisks[i],0)/r.zoneIdxs.length*100);
+    const cls=riskClass(avgRisk);
+    const col=riskColor(cls);
+    return `<div class="reg-item" style="border-left-color:${col};">
+      <div class="reg-header">
+        <span style="font-size:14px;">${r.icon}</span>
+        <span class="reg-title">${r.name}</span>
+        <span class="reg-pct" style="color:${col};">%${avgRisk}</span>
+      </div>
+      <div class="reg-bar"><div class="reg-bar-fill" style="width:${avgRisk}%;background:${col};"></div></div>
+      <div class="reg-status" style="color:${col};">${riskLabel(cls)} RİSK</div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   YANGIN RİSKİ YÜKSEK BÖLGELER
+═══════════════════════════════════════════════════ */
+function renderFireRisk(){
+  document.getElementById('fireRiskList').innerHTML = FIRE_RISK_ZONES.map(z => {
+    const pctColor = z.pct >= 70 ? '#ff6b35' : '#ffa040';
+    return `<div class="frz-item">
+      <div class="frz-top">
+        <span class="frz-icon">${z.icon}</span>
+        <span class="frz-name">${z.name}</span>
+        <span class="frz-pct" style="color:${pctColor};">%${z.pct}</span>
+      </div>
+      <div class="frz-meta">
+        <div class="frz-meta-cell"><span class="frz-meta-icon">🌡️</span>${z.temp}°C</div>
+        <div class="frz-meta-cell"><span class="frz-meta-icon">💧</span>%${z.nem}</div>
+        <div class="frz-meta-cell"><span class="frz-meta-icon">🌲</span>${z.agac}</div>
+        <div class="frz-meta-cell"><span class="frz-meta-icon">💨</span>${z.wind} km/h</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   SPREAD MODEL
+═══════════════════════════════════════════════════ */
+function updateModel(){
+  const ws  = +document.getElementById('mwsSlider').value;
+  const hum = +document.getElementById('mhumSlider').value;
+  const den = +document.getElementById('mdenSlider').value;
+  const tmp = +document.getElementById('mtempSlider').value;
+
+  document.getElementById('mwsDisp').textContent   = ws+' km/h';
+  document.getElementById('mhumDisp').textContent  = '%'+hum;
+  document.getElementById('mdenDisp').textContent  = '%'+den;
+  document.getElementById('mtempDisp').textContent = '%'+tmp;
+
+  const score=Math.min(1,(ws/80)*0.4+((100-hum)/100)*0.3+(den/100)*0.2+(tmp/100)*0.1);
+  document.getElementById('modelScore').textContent    = score.toFixed(2);
+  document.getElementById('modelFill').style.width    = (score*100)+'%';
+  document.getElementById('modelInterp').textContent  = score>0.8?'ÇOK HIZLI':score>0.6?'HIZLI':score>0.4?'ORTA':'YAVAŞ';
+  document.getElementById('modelTime').textContent    = score>0.8?'10 dakika':score>0.6?'20 dakika':score>0.4?'40 dakika':'60+ dakika';
+  document.getElementById('mHourly').textContent      = (score*4).toFixed(1)+' km²';
+  document.getElementById('mFlame').textContent       = Math.round(score*30)+' m';
+  document.getElementById('mCritical').textContent    = (score*9).toFixed(1)+' km²';
+  document.getElementById('mEvac').textContent        = Math.round(30-score*20)+' dk';
+}
+
+/* ═══════════════════════════════════════════════════
+   EVENT LOG
+═══════════════════════════════════════════════════ */
+const EV=[
+  {t:'Sistem başlatıldı',c:'info'},
+  {t:'Uydu bağlantısı kuruldu',c:'info'},
+  {t:'Risk analizi tamamlandı',c:'info'},
+  {t:'YÜKSEK RİSK: Marmaris bölgesi erken uyarı seviy...',c:'warn'},
+  {t:'POI nüfus verisi senkronize edildi',c:'info'},
+  {t:'Rüzgar yönü değişti – yayılım mode...',c:'warn'},
+  {t:'Sistem durum kontrolü – tüm parame...',c:'info'},
+  {t:'UYARI: Nem oranı kritik düzeyde',c:'warn'},
+  {t:'Bodrum bölgesi izlemeye alındı',c:'warn'},
+  {t:'KRİTİK: Yangın ivmesi arttı',c:'crit'},
+  {t:'Tahliye ekibi bildirim gönderildi',c:'info'},
+  {t:'Güvenli rota güncellendi',c:'info'},
+];
+let evIdx=0;
+function addEvent(txt,cls='info'){
+  const log=document.getElementById('evLog');
+  const t=new Date().toTimeString().slice(0,5);
+  const d=document.createElement('div');
+  d.className='ev-item';
+  d.innerHTML=`<div class="ev-dot ${cls==='crit'?'crit':cls==='warn'?'warn':'info'}"></div><span>[${t}] ${txt}</span>`;
+  log.insertBefore(d,log.firstChild);
+  while(log.children.length>20) log.removeChild(log.lastChild);
+}
+
+/* ═══════════════════════════════════════════════════
+   GÖKTÜRK SATELLITE CONNECT
+═══════════════════════════════════════════════════ */
+let satState = 'idle'; // idle | connecting | connected
+
+function handleSatConnect() {
+  if (satState !== 'idle') return;
+  satState = 'connecting';
+
+  const btn    = document.getElementById('satConnectBtn');
+  const check  = document.getElementById('satCheck');
+  const btnTxt = document.getElementById('satBtnTxt');
+  const lines  = document.getElementById('satStatusLines');
+  const banner = document.getElementById('satAdaptedBanner');
+  const note   = document.getElementById('satDemoNote');
+
+  btn.disabled = true;
+  check.textContent = '⟳';
+  btnTxt.textContent = 'Bağlanıyor...';
+
+  addEvent('GÖKTÜRK/İMECE uydu bağlantısı başlatıldı...', 'info');
+
+  // Show status lines container
+  lines.classList.add('visible');
+
+  // Animate each line appearing with a green dot
+  const lineIds = ['ssl1','ssl2','ssl3','ssl4'];
+  const dotIds  = ['dot1','dot2','dot3','dot4'];
+  lineIds.forEach((id, i) => {
+    setTimeout(() => {
+      document.getElementById(id).classList.add('show');
+      setTimeout(() => {
+        const d = document.getElementById(dotIds[i]);
+        d.className = 'sat-sl-dot ' + (i < lineIds.length - 1 ? 'green' : 'pulse');
+      }, 250);
+    }, 450 + i * 520);
+  });
+
+  // Final connected state
+  setTimeout(() => {
+    satState = 'connected';
+    btn.disabled = false;
+    btn.classList.add('active');
+    check.textContent = '✓';
+    btnTxt.textContent = 'Uydu Bağlantısı Aktif';
+    banner.classList.add('visible');
+    note.classList.add('visible');
+    addEvent('GÖKTÜRK-2 aktif – termal & SAR veri akışı başladı', 'info');
+    addEvent('İMECE SAR görüntüsü alındı – 1m çözünürlük', 'info');
+    document.getElementById('team-status').textContent = 'Ekip Durumu: GÖKTÜRK Aktif';
+  }, 450 + 4 * 520 + 400);
+}
+
+/* ═══════════════════════════════════════════════════
+   TOGGLE STATE & LOGIC
+═══════════════════════════════════════════════════ */
+const toggleState={risk:true,spread:true,poi:true,route:false,model:false,report:false};
+
+document.querySelectorAll('.tbtn').forEach(btn=>{
+  const l=btn.dataset.l;
+  btn.addEventListener('click',()=>{
+    toggleState[l]=!toggleState[l];
+    btn.classList.toggle('on',toggleState[l]);
+
+    if(l==='risk'){
+      renderHeat();
     }
-
-    function getPoiSymbol(type) {
-      switch(type) {
-        case 'Hastane': return '+';
-        case 'Okul': return '🏢';
-        case 'Köy': return '🏘';
-        case 'Hayvancılık': return '•';
-        default: return '•';
-      }
+    if(l==='spread'){
+      renderEllipse();
     }
-    const windSpeedSlider = document.getElementById('windSpeedSlider');
-    const windDirectionSlider = document.getElementById('windDirectionSlider');
-    const windSpeedDisplay = document.getElementById('windSpeedDisplay');
-    const windDirectionDisplay = document.getElementById('windDirectionDisplay');
-    const windArrow = document.getElementById('windArrow');
-    const simulationPanel = document.getElementById('simulationPanel');
-
-    windSpeedSlider.addEventListener('input', (e) => {
-      windSpeed = parseInt(e.target.value);
-      windSpeedDisplay.textContent = windSpeed + ' km/h';
-      if (simulationPanel.classList.contains('active')) {
-        updateEllipse();
-      }
-    });
-
-    windDirectionSlider.addEventListener('input', (e) => {
-      windDirection = parseInt(e.target.value);
-      windDirectionDisplay.textContent = windDirection + '°';
-      windArrow.style.transform = `rotate(${windDirection}deg)`;
-      if (simulationPanel.classList.contains('active')) {
-        updateEllipse();
-      }
-    });
-
-    // Vehicle marker and animation variables
-    let vehicleMarker = null;
-    let vehicleAnimationFrame = null;
-    let vehicleProgress = 0;
-    let vehicleStartTime = null;
-    let teamStatusElement = null;
-    const VEHICLE_TRAVEL_TIME = 20000; // 20 seconds for full route
-
-    // Spread ellipses layers
-    let ellipseLayerGroup = null;
-    let spreadForecastEnabled = true;
-
-    // Check if point is inside ellipse
-    function isPointInEllipse(point, center, windSpeedKmh, windDirectionDeg, timeMultiplier = 1) {
-      const majorAxis = (0.8 + (windSpeedKmh / 80) * 1.5) * timeMultiplier;
-      const minorAxis = (0.4 + (windSpeedKmh / 80) * 0.8) * timeMultiplier;
-      
-      const centerLat = center.lat;
-      const centerLng = center.lng;
-      const radPerDeg = Math.PI / 180;
-      const windRad = windDirectionDeg * radPerDeg;
-      
-      // Convert point to local coordinates relative to fire origin
-      const latDiff = point.lat - centerLat;
-      const lngDiff = point.lng - centerLng;
-      
-      // Convert to km (approximate)
-      const yLocal = latDiff * 111;
-      const xLocal = lngDiff * 111 * Math.cos(centerLat * radPerDeg);
-      
-      // Rotate back by wind direction to get ellipse coordinates
-      const rotX = xLocal * Math.cos(-windRad) - yLocal * Math.sin(-windRad);
-      const rotY = xLocal * Math.sin(-windRad) + yLocal * Math.cos(-windRad);
-      
-      // Check if point is inside ellipse
-      const ellipseCheck = (rotX * rotX) / (majorAxis * majorAxis) + (rotY * rotY) / (minorAxis * minorAxis);
-      return ellipseCheck <= 1;
+    if(l==='poi'){
+      renderPOI();
     }
-
-    // Get risk stage for POI (0=current, 1=1hour, 2=2hours, null=outside all)
-    function getPOIRiskStage(poi) {
-      if (isPointInEllipse(poi, fireOrigin, windSpeed, windDirection, 1.0)) {
-        return 0; // Stage 0 (T+0)
-      } else if (isPointInEllipse(poi, fireOrigin, windSpeed, windDirection, 1.6)) {
-        return 1; // Stage 1 (T+1)
-      } else if (isPointInEllipse(poi, fireOrigin, windSpeed, windDirection, 2.4)) {
-        return 2; // Stage 2 (T+2)
-      }
-      return null;
+    if(l==='route'){
+      renderRoute();
+      document.getElementById('routePanel').classList.toggle('hidden',!toggleState.route);
     }
-
-    // Get position along path based on progress (0-1)
-    function getPositionAlongPath(waypoints, progress) {
-      const totalDistance = waypoints.length - 1;
-      const segmentIndex = Math.floor(progress * totalDistance);
-      const segmentProgress = (progress * totalDistance) % 1;
-      
-      if (segmentIndex >= waypoints.length - 1) {
-        return waypoints[waypoints.length - 1];
-      }
-      
-      const from = waypoints[segmentIndex];
-      const to = waypoints[segmentIndex + 1];
-      
-      const lat = from[0] + (to[0] - from[0]) * segmentProgress;
-      const lng = from[1] + (to[1] - from[1]) * segmentProgress;
-      
-      return [lat, lng];
+    if(l==='model'){
+      document.getElementById('modelPanel').classList.toggle('hidden',!toggleState.model);
+      if(toggleState.model) updateModel();
     }
-
-    // Calculate angle for vehicle icon rotation
-    function getAngleAlongPath(waypoints, progress) {
-      const totalDistance = waypoints.length - 1;
-      let segmentIndex = Math.floor(progress * totalDistance);
-      
-      if (segmentIndex >= waypoints.length - 1) {
-        segmentIndex = waypoints.length - 2;
-      }
-      
-      const from = waypoints[segmentIndex];
-      const to = waypoints[Math.min(segmentIndex + 1, waypoints.length - 1)];
-      
-      return Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
+    if(l==='report'){
+      document.getElementById('reportPanel').classList.toggle('hidden',!toggleState.report);
+      document.getElementById('regionalBox').classList.toggle('hidden',!toggleState.report);
+      document.getElementById('fireRiskBox').classList.toggle('hidden',!toggleState.report);
+      if(toggleState.report){ updateReport(); renderFireRisk(); }
     }
+  });
+});
 
-    // Animate vehicle along safest route
-    function animateVehicle() {
-      if (!vehicleMarker || !toggleState.route) return;
-      
-      const now = Date.now();
-      if (!vehicle) 
+/* ═══════════════════════════════════════════════════
+   SLIDER CONTROLS
+═══════════════════════════════════════════════════ */
+document.getElementById('wsSlider').addEventListener('input',e=>{
+  windSpeed=+e.target.value;
+  document.getElementById('wsDisp').textContent=windSpeed+' km/h';
+  renderEllipse(); renderPOI(); renderEvac();
+});
+document.getElementById('wdSlider').addEventListener('input',e=>{
+  windDir=+e.target.value;
+  document.getElementById('wdDisp').textContent=windDir+'°';
+  document.getElementById('wArrow').style.transform=`rotate(${windDir}deg)`;
+  renderEllipse(); renderPOI(); renderEvac();
+});
+document.getElementById('fdSlider').addEventListener('input',e=>{
+  forestDensityFactor=+e.target.value/100;
+  document.getElementById('fdDisp').textContent='%'+(+e.target.value);
+  renderPOI(); renderEvac();
+});
+document.getElementById('forecastToggle').addEventListener('click',()=>{
+  forecastOn=!forecastOn;
+  const cb=document.getElementById('forecastCB');
+  cb.textContent=forecastOn?'✓':''; cb.classList.toggle('off',!forecastOn);
+  renderEllipse();
+});
+document.getElementById('timeSlider').addEventListener('input',e=>{
+  currentHour=+e.target.value;
+  document.getElementById('timeDisp').textContent=currentHour+':00';
+  renderHeat(); renderPOI(); renderEvac(); updateStats();
+  if(toggleState.report) updateReport();
+});
+
+// Model sliders
+['mwsSlider','mhumSlider','mdenSlider','mtempSlider'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',updateModel);
+});
+
+/* ═══════════════════════════════════════════════════
+   MAP INTERACTION
+═══════════════════════════════════════════════════ */
+map.on('mousemove',e=>{
+  document.getElementById('coords').innerHTML=
+    `<span>LAT</span> ${e.latlng.lat.toFixed(4)} &nbsp;<span>LNG</span> ${e.latlng.lng.toFixed(4)}`;
+});
+
+/* ═══════════════════════════════════════════════════
+   CLOCK
+═══════════════════════════════════════════════════ */
+function tick(){ document.getElementById('ts').textContent=new Date().toTimeString().slice(0,8); }
+tick(); setInterval(tick,1000);
+
+/* ═══════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════ */
+renderHeat();
+renderEllipse();
+renderPOI();
+renderEvac();
+updateStats();
+
+// Seed log
+[['Sistem durum kontrolü – tüm parame...','info'],
+ ['Sistem durum kontrolü – tüm parame...','info'],
+ ['Rüzgar yönü değişti – yayılım mode...','warn'],
+ ['Rüzgar yönü değişti – yayılım mode...','warn'],
+ ['POI nüfus verisi senkronize edildi','info'],
+ ['Marmaris bölgesi erken uyarı seviy...','warn'],
+].reverse().forEach(([t,c])=>addEvent(t,c));
+
+setInterval(()=>{ addEvent(EV[evIdx%EV.length].t,EV[evIdx%EV.length].c); evIdx++; },3800);
+fetchAllData();
+</script>
+</body>
+</html>
